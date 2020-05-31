@@ -340,7 +340,7 @@ class QtActivityDelegate extends QtActivityDelegateBase
     {
         if (m_activity.getActionBar() == null)
             return;
-        if (ViewConfiguration.get(m_activity).hasPermanentMenuKey() || !visible)
+        if (!visible)
             m_activity.getActionBar().hide();
         else
             m_activity.getActionBar().show();
