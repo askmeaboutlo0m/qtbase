@@ -2530,6 +2530,11 @@ static bool qt_cleanPath(QString *path)
 */
 QString QDir::cleanPath(const QString &path)
 {
+#ifdef Q_OS_ANDROID
+    if (path.startsWith("content://"_L1)) {
+        return path;
+    }
+#endif
     QString ret = path;
     qt_cleanPath(&ret);
     return ret;
