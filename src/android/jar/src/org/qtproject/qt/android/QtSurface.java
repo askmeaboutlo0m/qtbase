@@ -7,6 +7,8 @@ package org.qtproject.qt.android;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.PixelFormat;
+import android.view.MotionEvent;
+import android.view.PointerIcon;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
@@ -49,5 +51,10 @@ class QtSurface extends SurfaceView implements SurfaceHolder.Callback
         // so everything holding a reference to it needs to clean it up before we do that
         if (m_surfaceCallback != null)
             m_surfaceCallback.onSurfaceChanged(null);
+    }
+
+    @Override
+    public PointerIcon onResolvePointerIcon(MotionEvent event, int pointerIndex) {
+        return QtPointerIcon.instance().getIcon();
     }
 }

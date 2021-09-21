@@ -10,6 +10,7 @@
 
 #include "qandroidplatformscreen.h"
 #include "qandroidplatformintegration.h"
+#include "qandroidplatformcursor.h"
 #include "qandroidplatformwindow.h"
 #include "androidjnimain.h"
 #include "androidjnimenu.h"
@@ -62,6 +63,7 @@ Q_DECLARE_JNI_CLASS(DisplayMode, "android/view/Display$Mode")
 
 QAndroidPlatformScreen::QAndroidPlatformScreen(const QJniObject &displayObject)
     : QObject(), QPlatformScreen()
+    , m_cursor(new QAndroidPlatformCursor(this))
 {
     // Raster only apps should set QT_ANDROID_RASTER_IMAGE_DEPTH to 16
     // is way much faster than 32
@@ -119,6 +121,7 @@ QAndroidPlatformScreen::QAndroidPlatformScreen(const QJniObject &displayObject)
 
 QAndroidPlatformScreen::~QAndroidPlatformScreen()
 {
+    delete m_cursor;
 }
 
 QSize QAndroidPlatformScreen::sizeForDisplayId(int displayId)
