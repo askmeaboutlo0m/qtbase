@@ -33,6 +33,8 @@ public:
     QImage::Format format() const override { return m_format; }
     QSizeF physicalSize() const override { return m_physicalSize; }
 
+    QPlatformCursor *cursor() const override { return m_cursor; }
+
     QString name() const override { return m_name; }
     QList<Mode> modes() const override { return m_modes; }
     int currentMode() const override { return m_currentMode; }
@@ -86,6 +88,7 @@ private:
 private:
     QSize m_size;
     qreal m_densityAdjustment = 1.0;
+    QPlatformCursor *m_cursor;
 };
 
 QT_END_NAMESPACE
