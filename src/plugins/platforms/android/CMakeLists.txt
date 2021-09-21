@@ -35,6 +35,7 @@ qt_internal_add_plugin(QAndroidIntegrationPlugin
         qandroidplatformtheme.cpp qandroidplatformtheme.h
         qandroidplatformwindow.cpp qandroidplatformwindow.h
         qandroidsystemlocale.cpp qandroidsystemlocale.h
+        qandroidplatformcursor.cpp qandroidplatformcursor.h
         androidwindowembedding.cpp androidwindowembedding.h
         androidbackendregister.cpp androidbackendregister.h
     NO_UNITY_BUILD_SOURCES
