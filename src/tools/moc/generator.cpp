@@ -18,6 +18,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <limits>
 
 #include <private/qmetaobject_p.h> //for the flags.
 #include <private/qplugin_p.h> //for the flags.
