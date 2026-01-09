@@ -154,7 +154,9 @@ public:
 
     static bool setuidAllowed;
     static uint attribs;
+    static uint kritaAttribs;
     static inline bool testAttribute(uint flag) { return attribs & (1 << flag); }
+    static inline bool testKritaAttribute(uint flag) { return kritaAttribs & (1 << flag); }
 
     void processCommandLineArguments();
     QString cachedApplicationFilePath;

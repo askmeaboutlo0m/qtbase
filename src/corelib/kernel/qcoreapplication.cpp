@@ -382,6 +382,8 @@ Q_CONSTINIT uint QCoreApplicationPrivate::attribs =
     (1 << Qt::AA_SynthesizeMouseForUnhandledTouchEvents) |
     (1 << Qt::AA_SynthesizeMouseForUnhandledTabletEvents);
 
+Q_CONSTINIT uint QCoreApplicationPrivate::kritaAttribs = 0;
+
 struct QCoreApplicationData
 {
     QCoreApplicationData() noexcept {
@@ -1037,6 +1039,21 @@ bool QCoreApplication::testAttribute(Qt::ApplicationAttribute attribute)
 {
     return QCoreApplicationPrivate::testAttribute(attribute);
 }
+
+void QCoreApplication::setKritaAttribute(unsigned int attribute, bool on)
+{
+    if (on) {
+        QCoreApplicationPrivate::kritaAttribs |= 1 << attribute;
+    } else {
+        QCoreApplicationPrivate::kritaAttribs &= ~(1 << attribute);
+    }
+}
+
+bool QCoreApplication::testKritaAttribute(unsigned int attribute)
+{
+    return QCoreApplicationPrivate::testKritaAttribute(attribute);
+}
+
 
 #ifndef QT_NO_QOBJECT
 

@@ -38,6 +38,20 @@ namespace QtAndroidInput
     static QPointer<QWindow> m_mouseGrabber;
 
 
+    static bool m_haveLastTablet = false;
+    static int m_lastTabletWinId;
+    static int m_lastTabletDeviceId;
+    static int m_lastTabletPointerType;
+    static float m_lastTabletX;
+    static float m_lastTabletY;
+    static float m_lastTabletPressure;
+    static float m_lastTabletOrientation;
+    static float m_lastTabletTilt;
+    static float m_lastTabletRotation;
+    static long m_lastTabletTime;
+    static bool m_emulatedPageUpPressed = false;
+    static bool m_emulatedPageDownPressed = false;
+
     void updateSelection(int selStart, int selEnd, int candidatesStart, int candidatesEnd)
     {
         qCDebug(lcQpaInputMethods) << ">>> UPDATESELECTION" << selStart << selEnd << candidatesStart << candidatesEnd;
@@ -488,11 +502,18 @@ namespace QtAndroidInput
                 buttonState = jint(BUTTON_PRIMARY);
             }
             break;
+        case jint(ACTION_HOVER_MOVE):
         default:
             break;
         }
 
         Qt::MouseButtons buttons = toMouseButtons(buttonState, true);
+        if (m_emulatedPageUpPressed) {
+            buttons.setFlag(Qt::RightButton);
+        }
+        if (m_emulatedPageDownPressed) {
+            buttons.setFlag(Qt::MiddleButton);
+        }
 
         // Android presents tilt with AXIS_ORIENTATION for the direction of the
         // tilt and AXIS_TILT for how far tilted it is, in radians. Translate
@@ -506,6 +527,18 @@ namespace QtAndroidInput
         qCDebug(lcQpaInputMethods)
                 << action << pointerType << buttonState << '@' << x << y << "pressure" << pressure
                 << "tilt" << tiltX << tiltY << "rotation" << rotation << ": buttons" << buttons;
+
+        m_haveLastTablet = true;
+        m_lastTabletWinId = winId;
+        m_lastTabletDeviceId = deviceId;
+        m_lastTabletPointerType = pointerType;
+        m_lastTabletX = x;
+        m_lastTabletY = y;
+        m_lastTabletPressure = pressure;
+        m_lastTabletOrientation = orientation;
+        m_lastTabletTilt = tilt;
+        m_lastTabletRotation = rotation;
+        m_lastTabletTime = time;
 
         QWindowSystemInterface::handleTabletEvent(
                 window, ulong(time), localPos, globalPosF, int(QInputDevice::DeviceType::Stylus),
@@ -927,24 +960,77 @@ namespace QtAndroidInput
         return unicode ? QString(QChar(unicode)) : QString();
     }
 
+    // Xiaomi insanity, their stylus buttons input page up and down key presses.
+    static bool emulateTabletButtonsFromPageUpAndPageDown(
+        int key, jint modifier, jboolean autoRepeat, bool down)
+    {
+        if (!QCoreApplication::testKritaAttribute(KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_PAGE_UP_DOWN)) {
+            return false;
+        }
+
+        if ((m_emulatedPageUpPressed || m_emulatedPageDownPressed) && autoRepeat) {
+            return true;
+        }
+
+        if (!m_haveLastTablet) {
+            return false;
+        }
+
+        int buttonState;
+        switch (key) {
+        case 0x0000005c: // KEYCODE_PAGE_UP
+            buttonState = BUTTON_STYLUS_SECONDARY;
+            m_emulatedPageUpPressed = down;
+            break;
+        case 0x0000005d: // KEYCODE_PAGE_DOWN
+            buttonState = BUTTON_STYLUS_PRIMARY;
+            m_emulatedPageDownPressed = down;
+            break;
+        default:
+            return false;
+        }
+
+        tabletEvent(
+            nullptr,
+            nullptr,
+            m_lastTabletWinId,
+            m_lastTabletDeviceId,
+            m_lastTabletTime,
+            down ? ACTION_DOWN : ACTION_UP,
+            m_lastTabletPointerType,
+            buttonState,
+            m_lastTabletX,
+            m_lastTabletY,
+            m_lastTabletPressure,
+            m_lastTabletOrientation,
+            m_lastTabletTilt,
+            m_lastTabletRotation,
+            modifier);
+        return true;
+    }
+
     static void keyDown(JNIEnv */*env*/, jobject /*thiz*/, jint key, jint unicode, jint modifier, jboolean autoRepeat)
     {
-        QWindowSystemInterface::handleKeyEvent(0,
-                                               QEvent::KeyPress,
-                                               mapAndroidKey(key).toCombined(),
-                                               mapAndroidModifiers(modifier),
-                                               toString(unicode),
-                                               autoRepeat);
+        if (!emulateTabletButtonsFromPageUpAndPageDown(key, modifier, autoRepeat, true)) {
+            QWindowSystemInterface::handleKeyEvent(0,
+                                                   QEvent::KeyPress,
+                                                   mapAndroidKey(key).toCombined(),
+                                                   mapAndroidModifiers(modifier),
+                                                   toString(unicode),
+                                                   autoRepeat);
+        }
     }
 
     static void keyUp(JNIEnv */*env*/, jobject /*thiz*/, jint key, jint unicode, jint modifier, jboolean autoRepeat)
     {
-        QWindowSystemInterface::handleKeyEvent(0,
-                                               QEvent::KeyRelease,
-                                               mapAndroidKey(key).toCombined(),
-                                               mapAndroidModifiers(modifier),
-                                               toString(unicode),
-                                               autoRepeat);
+        if (!emulateTabletButtonsFromPageUpAndPageDown(key, modifier, autoRepeat, false)) {
+            QWindowSystemInterface::handleKeyEvent(0,
+                                                   QEvent::KeyRelease,
+                                                   mapAndroidKey(key).toCombined(),
+                                                   mapAndroidModifiers(modifier),
+                                                   toString(unicode),
+                                                   autoRepeat);
+        }
     }
 
     static void keyboardVisibilityChanged(JNIEnv */*env*/, jobject /*thiz*/, jboolean visibility)

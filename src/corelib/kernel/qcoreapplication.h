@@ -37,6 +37,19 @@ class QTranslator;
 #define qApp QCoreApplication::instance()
 
 class QCoreApplicationPrivate;
+
+// Attributes to enable Krita-specific behavior. Keep these as macros for the
+// sake of #ifdef-ability, that way we don't need to duplicate any versioning
+// and platform logic and just check whether the constant exists.
+
+// Xiaomi workaround. The stylus inputs page up and page down keys for its
+// buttons. Turn those into proper right and middle clicks instead.
+#ifdef Q_OS_ANDROID
+#   define KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_PAGE_UP_DOWN 0u
+#endif
+
+// End of Krita attributes.
+
 class Q_CORE_EXPORT QCoreApplication
 #ifndef QT_NO_QOBJECT
     : public QObject
@@ -77,6 +90,9 @@ public:
 
     static void setAttribute(Qt::ApplicationAttribute attribute, bool on = true);
     static bool testAttribute(Qt::ApplicationAttribute attribute);
+
+    static void setKritaAttribute(unsigned int attribute, bool on = true);
+    static bool testKritaAttribute(unsigned int attribute);
 
     static void setOrganizationDomain(const QString &orgDomain);
     static QString organizationDomain();
