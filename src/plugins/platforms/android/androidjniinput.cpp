@@ -61,14 +61,14 @@ namespace QtAndroidInput
                                                                candidatesStart, candidatesEnd);
     }
 
-    void showSoftwareKeyboard(int left, int top, int width, int height, int inputHints, int enterKeyType)
+    void showSoftwareKeyboard(int left, int top, int width, int height, int inputHints, int enterKeyType, int platformData)
     {
         AndroidBackendRegister *reg = QtAndroid::backendRegister();
         reg->callInterface<QtJniTypes::QtInputInterface, void>(
-                "showSoftwareKeyboard", QtAndroidPrivate::activity(),
-                left, top, width, height, inputHints,
-                enterKeyType);
-        qCDebug(lcQpaInputMethods) << "@@@ SHOWSOFTWAREKEYBOARD" << left << top << width << height << inputHints << enterKeyType;
+                "showSoftwareKeyboard", QtAndroidPrivate::activity(), left, top, width, height,
+                inputHints, enterKeyType, platformData);
+        qCDebug(lcQpaInputMethods) << "@@@ SHOWSOFTWAREKEYBOARD" << left << top << width << height
+                                   << inputHints << enterKeyType << platformData;
     }
 
     void resetSoftwareKeyboard()

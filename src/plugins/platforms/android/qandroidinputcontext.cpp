@@ -956,7 +956,8 @@ void QAndroidInputContext::showInputPanel()
     QRect rect = screenInputItemRectangle();
     QtAndroidInput::showSoftwareKeyboard(rect.left(), rect.top(), rect.width(), rect.height(),
                                          query->value(Qt::ImHints).toUInt(),
-                                         query->value(Qt::ImEnterKeyType).toUInt());
+                                         query->value(Qt::ImEnterKeyType).toUInt(),
+                                         query->value(Qt::ImPlatformData).toUInt());
 }
 
 void QAndroidInputContext::showInputPanelLater(Qt::ApplicationState state)

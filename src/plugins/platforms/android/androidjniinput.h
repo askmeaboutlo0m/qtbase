@@ -19,7 +19,7 @@ class QJniEnvironment;
 namespace QtAndroidInput
 {
     // Software keyboard support
-    void showSoftwareKeyboard(int top, int left, int width, int height, int inputHints, int enterKeyType);
+    void showSoftwareKeyboard(int top, int left, int width, int height, int inputHints, int enterKeyType, int platformData);
     void resetSoftwareKeyboard();
     void hideSoftwareKeyboard();
     bool isSoftwareKeyboardVisible();

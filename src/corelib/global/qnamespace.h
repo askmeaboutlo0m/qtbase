@@ -1448,6 +1448,17 @@ namespace Qt {
     Q_DECLARE_FLAGS(InputMethodHints, InputMethodHint)
     Q_DECLARE_OPERATORS_FOR_FLAGS(InputMethodHints)
 
+#ifdef Q_OS_ANDROID
+    // Set these values on an input method query's ImPlatformData value to set
+    // the soft input mode for when the widget shows a keyboard. See the
+    // equivalent LayoutParams.SOFT_INPUT_ADJUST_* values for what these do.
+    // Keep these in sync with the values in QtActivityDelegate.java!
+    static constexpr unsigned int ANDROID_INPUT_PLATFORM_DATA_SOFT_INPUT_ADJUST_RESIZE = 1u;
+    static constexpr unsigned int ANDROID_INPUT_PLATFORM_DATA_SOFT_INPUT_ADJUST_PAN = 2;
+    static constexpr unsigned int ANDROID_INPUT_PLATFORM_DATA_SOFT_INPUT_ADJUST_NOTHING = 3u;
+    static constexpr unsigned int ANDROID_INPUT_PLATFORM_DATA_SOFT_INPUT_ADJUST_MASK = 3u;
+#endif
+
     enum EnterKeyType {
         EnterKeyDefault,
         EnterKeyReturn,

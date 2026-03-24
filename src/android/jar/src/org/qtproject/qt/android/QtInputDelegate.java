@@ -64,6 +64,12 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
     // That is why we assume that the keyboard should be higher than 0.15 of the screen.
     private static final float KEYBOARD_TO_SCREEN_RATIO = 0.15f;
 
+    // Keep these in sync with the values in qnamespace.h!
+    private static final int PLATFORM_DATA_SOFT_INPUT_ADJUST_RESIZE = 1;
+    private static final int PLATFORM_DATA_SOFT_INPUT_ADJUST_PAN = 2;
+    private static final int PLATFORM_DATA_SOFT_INPUT_ADJUST_NOTHING = 3;
+    private static final int PLATFORM_DATA_SOFT_INPUT_ADJUST_MASK = 3;
+
     private boolean m_keyboardTransitionInProgress = false;
     private boolean m_keyboardIsVisible = false;
     private boolean m_isKeyboardHidingAnimationOngoing = false;
@@ -154,7 +160,7 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
 
     private void showKeyboard(Activity activity,
                               final int x, final int y, final int width, final int height,
-                              final int inputHints, final int enterKeyType)
+                              final int inputHints, final int enterKeyType, final int platformData)
     {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Window window = activity.getWindow();
@@ -174,7 +180,7 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
                                 QtNativeInputConnection.updateCursorPosition();
                                 if (m_softInputMode == 0) {
                                     probeForKeyboardHeight(activity, x, y, width, height,
-                                                            inputHints, enterKeyType);
+                                                            inputHints, enterKeyType, platformData);
                                 }
                             }
                         }
@@ -195,7 +201,7 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
                             setKeyboardVisibility(true, System.nanoTime());
                             if (m_softInputMode == 0) {
                                 probeForKeyboardHeight(activity,
-                                        x, y, width, height, inputHints, enterKeyType);
+                                        x, y, width, height, inputHints, enterKeyType, platformData);
                             }
                             break;
                         case InputMethodManager.RESULT_HIDDEN:
@@ -211,7 +217,7 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
     @Override
     public void showSoftwareKeyboard(Activity activity,
                                      final int x, final int y, final int width, final int height,
-                                     final int inputHints, final int enterKeyType)
+                                     final int inputHints, final int enterKeyType, final int platformData)
     {
         if (m_imm == null)
             return;
@@ -220,14 +226,14 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
             if (m_imm == null || m_currentEditText == null)
                 return;
 
-            if (updateSoftInputMode(activity, height))
+            if (updateSoftInputMode(activity, height, platformData))
                 return;
 
             m_currentEditText.setEditTextOptions(enterKeyType, inputHints);
             m_currentEditText.setLayoutParams(new QtLayout.LayoutParams(width, height, x, y));
             m_currentEditText.requestFocus();
             m_currentEditText.postDelayed(() -> {
-                showKeyboard(activity, x, y, width, height, inputHints, enterKeyType);
+                showKeyboard(activity, x, y, width, height, inputHints, enterKeyType, platformData);
                 if (m_currentEditText.m_optionsChanged) {
                     m_imm.restartInput(m_currentEditText);
                     m_currentEditText.m_optionsChanged = false;
@@ -426,7 +432,34 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
         m_currentEditText = currentEditText;
     }
 
-    private boolean updateSoftInputMode(Activity activity, int height)
+    private boolean updateSoftInputMode(Activity activity, int height, int platformData)
+    {
+        if (m_softInputMode != 0) {
+            Log.w(TAG, "DPINPUT fixed soft input mode " + m_softInputMode);
+            activity.getWindow().setSoftInputMode(m_softInputMode);
+            int stateHidden = WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN;
+            return (m_softInputMode & stateHidden) != 0;
+        } else {
+            int softInputMode;
+            int platformSoftInputMode = platformData & PLATFORM_DATA_SOFT_INPUT_ADJUST_MASK;
+            if (platformSoftInputMode == PLATFORM_DATA_SOFT_INPUT_ADJUST_RESIZE) {
+                softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
+            } else if (platformSoftInputMode == PLATFORM_DATA_SOFT_INPUT_ADJUST_PAN) {
+                softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN;
+            } else if (platformSoftInputMode == PLATFORM_DATA_SOFT_INPUT_ADJUST_NOTHING) {
+                softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING;
+            } else if (height > getKeyboardVisibleHeight(activity)) {
+                softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
+            } else {
+                softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN;
+            }
+            activity.getWindow().setSoftInputMode(
+                    WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED | softInputMode);
+        }
+        return false;
+    }
+
+    private int getKeyboardVisibleHeight(Activity activity)
     {
         DisplayMetrics metrics = new DisplayMetrics();
         QtDisplayManager.getDisplay(activity).getMetrics(metrics);
@@ -434,34 +467,18 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
         // If the screen is in portrait mode than we estimate that keyboard height
         // will not be higher than 2/5 of the screen. Otherwise we estimate that keyboard height
         // will not be higher than 2/3 of the screen
-        final int visibleHeight;
         if (metrics.widthPixels < metrics.heightPixels) {
-            visibleHeight = m_portraitKeyboardHeight != 0 ?
+            return m_portraitKeyboardHeight != 0 ?
                     m_portraitKeyboardHeight : metrics.heightPixels * 3 / 5;
         } else {
-            visibleHeight = m_landscapeKeyboardHeight != 0 ?
+            return m_landscapeKeyboardHeight != 0 ?
                     m_landscapeKeyboardHeight : metrics.heightPixels / 3;
         }
-
-        if (m_softInputMode != 0) {
-            activity.getWindow().setSoftInputMode(m_softInputMode);
-            int stateHidden = WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN;
-            return (m_softInputMode & stateHidden) != 0;
-        } else {
-            int stateUnchanged = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED;
-            if (height > visibleHeight) {
-                int adjustResize = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
-                activity.getWindow().setSoftInputMode(stateUnchanged | adjustResize);
-            } else {
-                int adjustPan = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN;
-                activity.getWindow().setSoftInputMode(stateUnchanged | adjustPan);
-            }
-        }
-        return false;
     }
 
     private void probeForKeyboardHeight(Activity activity, int x, int y,
-                                        int width, int height, int inputHints, int enterKeyType)
+                                        int width, int height, int inputHints, int enterKeyType,
+                                        int platformData)
     {
         if (m_currentEditText == null) {
             Log.w(TAG, "probeForKeyboardHeight: null QtEditText");
@@ -479,13 +496,13 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
                     if (m_landscapeKeyboardHeight != r.bottom) {
                         m_landscapeKeyboardHeight = r.bottom;
                         showSoftwareKeyboard(activity, x, y, width, height,
-                                inputHints, enterKeyType);
+                                inputHints, enterKeyType, platformData);
                     }
                 } else {
                     if (m_portraitKeyboardHeight != r.bottom) {
                         m_portraitKeyboardHeight = r.bottom;
                         showSoftwareKeyboard(activity, x, y, width, height,
-                                inputHints, enterKeyType);
+                                inputHints, enterKeyType, platformData);
                     }
                 }
             } else {

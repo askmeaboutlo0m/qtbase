@@ -10,7 +10,7 @@ interface QtInputInterface {
                          final int candidatesEnd);
     void showSoftwareKeyboard(Activity activity, final int x, final int y,
                               final int width, final int height, final int inputHints,
-                              final int enterKeyType);
+                              final int enterKeyType, final int platformData);
     void resetSoftwareKeyboard();
     void hideSoftwareKeyboard();
     boolean isSoftwareKeyboardVisible();
