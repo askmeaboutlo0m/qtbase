@@ -48,6 +48,13 @@ class QCoreApplicationPrivate;
 #   define KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_PAGE_UP_DOWN 0u
 #endif
 
+// OnePlus workaround. The stylus inputs F21 for its button. Turn it into proper
+// middle clicks instead. This constant name is kept generic in case we need to
+// add additional function keys.
+#ifdef Q_OS_ANDROID
+#   define KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_HIGH_FUNCTION_KEYS 2u
+#endif
+
 // End of Krita attributes.
 
 class Q_CORE_EXPORT QCoreApplication

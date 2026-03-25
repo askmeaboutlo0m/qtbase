@@ -51,6 +51,7 @@ namespace QtAndroidInput
     static long m_lastTabletTime;
     static bool m_emulatedPageUpPressed = false;
     static bool m_emulatedPageDownPressed = false;
+    static bool m_emulatedF21Pressed = false;
 
     void updateSelection(int selStart, int selEnd, int candidatesStart, int candidatesEnd)
     {
@@ -511,7 +512,7 @@ namespace QtAndroidInput
         if (m_emulatedPageUpPressed) {
             buttons.setFlag(Qt::RightButton);
         }
-        if (m_emulatedPageDownPressed) {
+        if (m_emulatedPageDownPressed || m_emulatedF21Pressed) {
             buttons.setFlag(Qt::MiddleButton);
         }
 
@@ -961,14 +962,11 @@ namespace QtAndroidInput
     }
 
     // Xiaomi insanity, their stylus buttons input page up and down key presses.
-    static bool emulateTabletButtonsFromPageUpAndPageDown(
+    // And also OnePlus, their stylus button inputs F21.
+    static bool emulateTabletButtonsFromKeyboard(
         int key, jint modifier, jboolean autoRepeat, bool down)
     {
-        if (!QCoreApplication::testKritaAttribute(KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_PAGE_UP_DOWN)) {
-            return false;
-        }
-
-        if ((m_emulatedPageUpPressed || m_emulatedPageDownPressed) && autoRepeat) {
+        if ((m_emulatedPageUpPressed || m_emulatedPageDownPressed || m_emulatedF21Pressed) && autoRepeat) {
             return true;
         }
 
@@ -979,13 +977,29 @@ namespace QtAndroidInput
         int buttonState;
         switch (key) {
         case 0x0000005c: // KEYCODE_PAGE_UP
-            buttonState = BUTTON_STYLUS_SECONDARY;
-            m_emulatedPageUpPressed = down;
-            break;
+            if (QCoreApplication::testKritaAttribute(KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_PAGE_UP_DOWN)) {
+                buttonState = BUTTON_STYLUS_SECONDARY;
+                m_emulatedPageUpPressed = down;
+                break;
+            } else {
+                return false;
+            }
         case 0x0000005d: // KEYCODE_PAGE_DOWN
-            buttonState = BUTTON_STYLUS_PRIMARY;
-            m_emulatedPageDownPressed = down;
-            break;
+            if (QCoreApplication::testKritaAttribute(KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_PAGE_UP_DOWN)) {
+                buttonState = BUTTON_STYLUS_PRIMARY;
+                m_emulatedPageDownPressed = down;
+                break;
+            } else {
+                return false;
+            }
+        case 0x0000014e: // KEYCODE_F21
+            if (QCoreApplication::testKritaAttribute(KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_HIGH_FUNCTION_KEYS)) {
+                buttonState = BUTTON_STYLUS_PRIMARY;
+                m_emulatedF21Pressed = down;
+                break;
+            } else {
+                return false;
+            }
         default:
             return false;
         }
@@ -1011,7 +1025,7 @@ namespace QtAndroidInput
 
     static void keyDown(JNIEnv */*env*/, jobject /*thiz*/, jint key, jint unicode, jint modifier, jboolean autoRepeat)
     {
-        if (!emulateTabletButtonsFromPageUpAndPageDown(key, modifier, autoRepeat, true)) {
+        if (!emulateTabletButtonsFromKeyboard(key, modifier, autoRepeat, true)) {
             QWindowSystemInterface::handleKeyEvent(0,
                                                    QEvent::KeyPress,
                                                    mapAndroidKey(key).toCombined(),
@@ -1023,7 +1037,7 @@ namespace QtAndroidInput
 
     static void keyUp(JNIEnv */*env*/, jobject /*thiz*/, jint key, jint unicode, jint modifier, jboolean autoRepeat)
     {
-        if (!emulateTabletButtonsFromPageUpAndPageDown(key, modifier, autoRepeat, false)) {
+        if (!emulateTabletButtonsFromKeyboard(key, modifier, autoRepeat, false)) {
             QWindowSystemInterface::handleKeyEvent(0,
                                                    QEvent::KeyRelease,
                                                    mapAndroidKey(key).toCombined(),
