@@ -447,6 +447,10 @@ namespace QtAndroidInput
         if (key >= 0x00000083 && key <= 0x0000008e)
             return QKeyCombination::fromCombined(Qt::Key_F1 + key - 0x00000083);
 
+        // F13--F24     0x00000146 -- 0x00000151
+        if (key >= 0x00000146 && key <= 0x00000151)
+            return QKeyCombination::fromCombined(Qt::Key_F13 + key - 0x00000146);
+
         // NUMPAD_0--NUMPAD_9     0x00000090 -- 0x00000099
         if (key >= 0x00000090 && key <= 0x00000099)
             return QKeyCombination::fromCombined(Qt::KeypadModifier | Qt::Key_0 + key - 0x00000090);
