@@ -484,6 +484,18 @@ namespace QtAndroidInput
             break;
         }
 
+        switch (action) {
+        case jint(ACTION_DOWN):
+        case jint(ACTION_UP):
+        case jint(ACTION_CANCEL):
+            m_emulatedPageUpPressed = false;
+            m_emulatedPageDownPressed = false;
+            m_emulatedF21Pressed = false;
+            break;
+        default:
+            break;
+        }
+
         const QPointF localPos(x, y);
         const QPointF globalPosF =
                 window && window->handle() ? window->handle()->mapFromGlobalF(localPos) : localPos;
@@ -975,11 +987,12 @@ namespace QtAndroidInput
         }
 
         int buttonState;
+        bool *emulatedButtonPressed;
         switch (key) {
         case 0x0000005c: // KEYCODE_PAGE_UP
             if (QCoreApplication::testKritaAttribute(KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_PAGE_UP_DOWN)) {
                 buttonState = BUTTON_STYLUS_SECONDARY;
-                m_emulatedPageUpPressed = down;
+                emulatedButtonPressed = &m_emulatedPageUpPressed;
                 break;
             } else {
                 return false;
@@ -987,7 +1000,7 @@ namespace QtAndroidInput
         case 0x0000005d: // KEYCODE_PAGE_DOWN
             if (QCoreApplication::testKritaAttribute(KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_PAGE_UP_DOWN)) {
                 buttonState = BUTTON_STYLUS_PRIMARY;
-                m_emulatedPageDownPressed = down;
+                emulatedButtonPressed = &m_emulatedPageDownPressed;
                 break;
             } else {
                 return false;
@@ -995,7 +1008,7 @@ namespace QtAndroidInput
         case 0x0000014e: // KEYCODE_F21
             if (QCoreApplication::testKritaAttribute(KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_HIGH_FUNCTION_KEYS)) {
                 buttonState = BUTTON_STYLUS_PRIMARY;
-                m_emulatedF21Pressed = down;
+                emulatedButtonPressed = &m_emulatedF21Pressed;
                 break;
             } else {
                 return false;
@@ -1020,6 +1033,10 @@ namespace QtAndroidInput
             m_lastTabletTilt,
             m_lastTabletRotation,
             modifier);
+        // Must come *after* the tabletEvent call, it resets these emulated
+        // press values down and up actions!
+        *emulatedButtonPressed = down;
+
         return true;
     }
 
