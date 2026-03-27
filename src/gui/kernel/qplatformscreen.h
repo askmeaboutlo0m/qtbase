@@ -127,6 +127,11 @@ public:
 
     static QDpi overrideDpi(const QDpi &in);
 
+#ifdef Q_OS_ANDROID
+    virtual qreal densityAdjustment() const;
+    virtual void setDensityAdjustment(qreal densityAdjustment);
+#endif
+
 protected:
     void resizeMaximizedWindows();
 

@@ -300,9 +300,23 @@ void QAndroidPlatformScreen::topVisibleWindowChanged()
 
 static const int androidLogicalDpi = 72;
 
+qreal QAndroidPlatformScreen::densityAdjustment() const
+{
+    return m_densityAdjustment;
+}
+
+void QAndroidPlatformScreen::setDensityAdjustment(qreal densityAdjustment)
+{
+    if (densityAdjustment > 0.0 && !qFuzzyCompare(m_densityAdjustment, densityAdjustment)) {
+        m_densityAdjustment = densityAdjustment;
+        QDpi dpi = logicalDpi();
+        QWindowSystemInterface::handleScreenLogicalDotsPerInchChange(QPlatformScreen::screen(), dpi.first, dpi.second);
+    }
+}
+
 QDpi QAndroidPlatformScreen::logicalDpi() const
 {
-    qreal lDpi = QtAndroid::pixelDensity() * androidLogicalDpi;
+    qreal lDpi = QtAndroid::pixelDensity() * m_densityAdjustment * androidLogicalDpi;
     return QDpi(lDpi, lDpi);
 }
 

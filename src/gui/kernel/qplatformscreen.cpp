@@ -158,6 +158,20 @@ QDpi QPlatformScreen::overrideDpi(const QDpi &in)
     return overrideDpi > 0 ?  QDpi(overrideDpi, overrideDpi) : in;
 }
 
+#ifdef Q_OS_ANDROID
+// These get overridden in QAndroidPlatformScreen.
+
+qreal QPlatformScreen::densityAdjustment() const
+{
+    return 1.0;
+}
+
+void QPlatformScreen::setDensityAdjustment(qreal densityAdjustment)
+{
+    Q_UNUSED(densityAdjustment);
+}
+#endif
+
 /*!
     Reimplement to return the base logical DPI for the platform. This
     DPI value should correspond to a standard-DPI (1x) display. The

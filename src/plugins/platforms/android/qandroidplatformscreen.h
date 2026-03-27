@@ -51,6 +51,9 @@ public:
     static QRect &defaultAvailableGeometry();
     static QSize sizeForDisplayId(int displayId);
 
+    qreal densityAdjustment() const override;
+    void setDensityAdjustment(qreal value) override;
+
 public slots:
     void setPhysicalSize(const QSize &size);
     void setPhysicalSizeFromPixels(const QSize &size);
@@ -82,6 +85,7 @@ private:
     void applicationStateChanged(Qt::ApplicationState);
 private:
     QSize m_size;
+    qreal m_densityAdjustment = 1.0;
 };
 
 QT_END_NAMESPACE
