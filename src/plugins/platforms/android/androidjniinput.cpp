@@ -831,6 +831,9 @@ namespace QtAndroidInput
         case 0x000000de: // KEYCODE_MEDIA_AUDIO_TRACK
             return Qt::Key_AudioCycleTrack;
 
+        case 0x000002ce: // Key code 718, used by Huawei styluses for a double-tap gesture.
+            return Qt::Key_F25;
+
         default:
             qWarning() << "Unhandled key code " << key << '!';
             return QKeyCombination::fromCombined(0);
