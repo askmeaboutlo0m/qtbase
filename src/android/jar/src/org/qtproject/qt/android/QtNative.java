@@ -88,7 +88,7 @@ public class QtNative
     }
 
     @UsedFromNativeCode
-    static Activity activity()
+    public static Activity activity()
     {
         synchronized (m_mainActivityMutex) {
             return m_activity != null ? m_activity.get() : null;
