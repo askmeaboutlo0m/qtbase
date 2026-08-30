@@ -24,6 +24,7 @@ static inline QString cleanedAssetPath(QString file)
     if (file.startsWith(assetsPrefix))
         file.remove(0, prefixSize);
     file.replace("//"_L1, "/"_L1);
+    file.replace("/."_L1, ""_L1);
     if (file.startsWith(u'/'))
         file.remove(0, 1);
     if (file.endsWith(u'/'))
@@ -35,6 +36,7 @@ static inline QString prefixedPath(QString path)
 {
     path = assetsPrefix + u'/' + path;
     path.replace("//"_L1, "/"_L1);
+    path.replace("/."_L1, ""_L1);
     return path;
 }
 
@@ -128,6 +130,7 @@ public:
         }
         m_path = assetsPrefix + u'/' + m_path + u'/';
         m_path.replace("//"_L1, "/"_L1);
+        m_path.replace("/."_L1, ""_L1);
     }
 
     QString currentFileName() const
@@ -391,6 +394,7 @@ AndroidAssetsFileEngineHandler::create(const QString &fileName) const
 
     QString path = fileName.mid(prefixSize);
     path.replace("//"_L1, "/"_L1);
+    path.replace("/."_L1, ""_L1);
     if (path.startsWith(u'/'))
         path.remove(0, 1);
     if (path.endsWith(u'/'))
