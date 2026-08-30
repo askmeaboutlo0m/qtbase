@@ -592,6 +592,18 @@ QT_BEGIN_NAMESPACE
 #define GL_DEPTH_CLAMP                    0x864F
 #endif
 
+#ifndef GL_SYNC_STATUS
+#define GL_SYNC_STATUS                    0x9114
+#endif
+
+#ifndef GL_SYNC_GPU_COMMANDS_COMPLETE
+#define GL_SYNC_GPU_COMMANDS_COMPLETE     0x9117
+#endif
+
+#ifndef GL_SIGNALED
+#define GL_SIGNALED                       0x9119
+#endif
+
 /*!
     Constructs a new QRhiGles2InitParams.
 
