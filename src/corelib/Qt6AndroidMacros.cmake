@@ -5,7 +5,9 @@
 
 # Locate newest Android sdk build tools revision
 function(_qt_internal_android_get_sdk_build_tools_revision out_var)
-    if (NOT QT_ANDROID_SDK_BUILD_TOOLS_REVISION)
+    if (QT_ANDROID_SDK_BUILD_TOOLS_REVISION)
+        set(${out_var} "${QT_ANDROID_SDK_BUILD_TOOLS_REVISION}" PARENT_SCOPE)
+    else()
         file(GLOB android_build_tools
             LIST_DIRECTORIES true
             RELATIVE "${ANDROID_SDK_ROOT}/build-tools"
@@ -17,8 +19,8 @@ function(_qt_internal_android_get_sdk_build_tools_revision out_var)
         list(SORT android_build_tools)
         list(REVERSE android_build_tools)
         list(GET android_build_tools 0 android_build_tools_latest)
+        set(${out_var} "${android_build_tools_latest}" PARENT_SCOPE)
     endif()
-    set(${out_var} "${android_build_tools_latest}" PARENT_SCOPE)
 endfunction()
 
 # Returns the target specific Android SDK tools revision. The function falls
