@@ -484,6 +484,20 @@ qreal QScreen::refreshRate() const
     return d->refreshRate;
 }
 
+#ifdef KRITA_QT_SCREEN_DENSITY_ADJUSTMENT
+qreal QScreen::densityAdjustment() const
+{
+    Q_D(const QScreen);
+    return d->platformScreen->densityAdjustment();
+}
+
+void QScreen::setDensityAdjustment(qreal value)
+{
+    Q_D(QScreen);
+    d->platformScreen->setDensityAdjustment(value);
+}
+#endif
+
 /*!
     \property QScreen::primaryOrientation
     \brief the primary screen orientation
