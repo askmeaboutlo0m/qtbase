@@ -117,6 +117,12 @@ public:
 
     qreal refreshRate() const;
 
+#ifdef Q_OS_ANDROID
+#   define KRITA_QT_SCREEN_DENSITY_ADJUSTMENT 1
+    qreal densityAdjustment() const;
+    void setDensityAdjustment(qreal value);
+#endif
+
     QT_DECLARE_NATIVE_INTERFACE_ACCESSOR(QScreen)
 
 Q_SIGNALS:
