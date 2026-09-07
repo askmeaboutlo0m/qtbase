@@ -34,18 +34,29 @@ QAndroidPlatformClipboard::QAndroidPlatformClipboard()
 
 QAndroidPlatformClipboard::~QAndroidPlatformClipboard()
 {
-    if (data)
-        delete data;
+    delete m_data;
 }
 
-QMimeData *QAndroidPlatformClipboard::getClipboardMimeData()
+void QAndroidPlatformClipboard::getClipboardMimeData()
 {
-    QMimeData *data = new QMimeData;
+    // m_data may contain additional data that doesn't get put onto the system
+    // clipboard, such as images or application-specific data. We only clear
+    // and re-retrieve the formats stored on the system clipboard to not lose
+    // the additional types. It is not possible to reliably check if we "own"
+    // the clipboard or something, so we may end up with a mixture of formats.
+    // That's better than totally obliterating application data though.
+    {
+        using namespace Qt::StringLiterals;
+        m_data->removeFormat(u"text/plain"_s);
+        m_data->removeFormat(u"text/html"_s);
+        m_data->removeFormat(u"text/uri-list"_s);
+    }
+
     if (m_clipboardManager.callMethod<jboolean>("hasClipboardText")) {
-        data->setText(m_clipboardManager.callMethod<QString>("getClipboardText"));
+        m_data->setText(m_clipboardManager.callMethod<QString>("getClipboardText"));
     }
     if (m_clipboardManager.callMethod<jboolean>("hasClipboardHtml")) {
-        data->setHtml(m_clipboardManager.callMethod<QString>("getClipboardHtml"));
+        m_data->setHtml(m_clipboardManager.callMethod<QString>("getClipboardHtml"));
     }
     if (m_clipboardManager.callMethod<jboolean>("hasClipboardUri")) {
         auto uris = m_clipboardManager.callMethod<QString[]>("getClipboardUris");
@@ -53,20 +64,17 @@ QMimeData *QAndroidPlatformClipboard::getClipboardMimeData()
             QList<QUrl> urls;
             for (const QString &uri : uris)
                 urls << QUrl(uri);
-            data->setUrls(urls);
+            m_data->setUrls(urls);
         }
     }
-    return data;
 }
 
 QMimeData *QAndroidPlatformClipboard::mimeData(QClipboard::Mode mode)
 {
     Q_UNUSED(mode);
     Q_ASSERT(supportsMode(mode));
-    if (data)
-        data->deleteLater();
-    data = getClipboardMimeData();
-    return data;
+    getClipboardMimeData();
+    return m_data;
 }
 
 void QAndroidPlatformClipboard::clearClipboardData()
@@ -92,14 +100,18 @@ void QAndroidPlatformClipboard::setClipboardMimeData(QMimeData *data)
 
 void QAndroidPlatformClipboard::setMimeData(QMimeData *data, QClipboard::Mode mode)
 {
-    if (!data) {
-        clearClipboardData();
-        return;
-    }
-    if (data && supportsMode(mode))
-        setClipboardMimeData(data);
-    if (data != 0)
+    if (supportsMode(mode)) {
+        if (data) {
+            m_data->deleteLater();
+            m_data = data;
+            setClipboardMimeData(data);
+        } else {
+            m_data->clear();
+            clearClipboardData();
+        }
+    } else if (data) {
         data->deleteLater();
+    }
 }
 
 bool QAndroidPlatformClipboard::supportsMode(QClipboard::Mode mode) const
