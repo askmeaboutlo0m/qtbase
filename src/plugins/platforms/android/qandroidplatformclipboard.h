@@ -28,14 +28,14 @@ public:
     static bool registerNatives(QJniEnvironment &env);
 
 private:
-    QMimeData *getClipboardMimeData();
+    void getClipboardMimeData();
     void setClipboardMimeData(QMimeData *data);
     void clearClipboardData();
 
     static void onClipboardDataChanged(JNIEnv *env, jobject obj, jlong nativePointer);
     Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(onClipboardDataChanged)
 
-    QMimeData *data = nullptr;
+    QMimeData *m_data = new QMimeData;
     QtJniTypes::QtClipboardManager m_clipboardManager = nullptr;
 };
 
