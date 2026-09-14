@@ -141,8 +141,27 @@ namespace QtAndroidInput
         return mouseButtons;
     }
 
+    static Qt::KeyboardModifiers mapAndroidModifiers(jint modifiers)
+    {
+        Qt::KeyboardModifiers qmodifiers;
+
+        if (modifiers & 0x00000001) // META_SHIFT_ON
+            qmodifiers |= Qt::ShiftModifier;
+
+        if (modifiers & 0x00000002) // META_ALT_ON
+            qmodifiers |= Qt::AltModifier;
+
+        if (modifiers & 0x00000004) // META_SYM_ON
+            qmodifiers |= Qt::MetaModifier;
+
+        if (modifiers & 0x00001000) // META_CTRL_ON
+            qmodifiers |= Qt::ControlModifier;
+
+        return qmodifiers;
+    }
+
     static void sendMouseButtonEvents(QWindow *topLevel, QPoint localPos, QPoint globalPos,
-                                      jint mouseButtonState, QEvent::Type type)
+                                      jint mouseButtonState, jint metaState, QEvent::Type type)
     {
         const Qt::MouseButtons qtButtons = toMouseButtons(mouseButtonState);
         const bool mouseReleased = type == QEvent::MouseButtonRelease && qtButtons == Qt::NoButton;
@@ -158,12 +177,13 @@ namespace QtAndroidInput
             const auto button = static_cast<Qt::MouseButton>(buttonInt);
             if (eventButtons.testFlag(button)) {
                 QWindowSystemInterface::handleMouseEvent(topLevel, localPos, globalPos,
-                                                         qtButtons, button, type);
+                                                         qtButtons, button, type,
+                                                         mapAndroidModifiers(metaState));
             }
         }
     }
 
-    static void mouseDown(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y, jint mouseButtonState)
+    static void mouseDown(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y, jint mouseButtonState, jint metaState)
     {
         if (m_ignoreMouseEvents)
             return;
@@ -173,10 +193,10 @@ namespace QtAndroidInput
         m_mouseGrabber = window;
         const QPoint globalPos = window && window->handle() ?
                 window->handle()->mapToGlobal(localPos) : localPos;
-        sendMouseButtonEvents(window, localPos, globalPos, mouseButtonState, QEvent::MouseButtonPress);
+        sendMouseButtonEvents(window, localPos, globalPos, mouseButtonState, metaState, QEvent::MouseButtonPress);
     }
 
-    static void mouseUp(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y, jint mouseButtonState)
+    static void mouseUp(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y, jint mouseButtonState, jint metaState)
     {
         const QPoint localPos(x,y);
         QWindow *window = m_mouseGrabber.data();
@@ -186,12 +206,12 @@ namespace QtAndroidInput
         const QPoint globalPos = window && window->handle() ?
                                     window->handle()->mapToGlobal(localPos) : localPos;
 
-        sendMouseButtonEvents(window, localPos, globalPos, mouseButtonState, QEvent::MouseButtonRelease);
+        sendMouseButtonEvents(window, localPos, globalPos, mouseButtonState, metaState, QEvent::MouseButtonRelease);
         m_ignoreMouseEvents = false;
         m_mouseGrabber.clear();
     }
 
-    static void mouseMove(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y, jint mouseButtonState)
+    static void mouseMove(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y, jint mouseButtonState, jint metaState)
     {
         if (m_ignoreMouseEvents)
             return;
@@ -205,10 +225,11 @@ namespace QtAndroidInput
         const Qt::MouseButtons qtButtons = toMouseButtons(mouseButtonState);
         m_lastSeenButtons = qtButtons;
         QWindowSystemInterface::handleMouseEvent(window, localPos, globalPos,
-                                                 qtButtons, Qt::NoButton, QEvent::MouseMove);
+                                                 qtButtons, Qt::NoButton, QEvent::MouseMove,
+                                                 mapAndroidModifiers(metaState));
     }
 
-    static void mouseWheel(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y, jfloat hdelta, jfloat vdelta)
+    static void mouseWheel(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y, jfloat hdelta, jfloat vdelta, jint metaState)
     {
         if (m_ignoreMouseEvents)
             return;
@@ -225,10 +246,11 @@ namespace QtAndroidInput
                                                  localPos,
                                                  globalPos,
                                                  QPoint(),
-                                                 angleDelta);
+                                                 angleDelta,
+                                                 mapAndroidModifiers(metaState));
     }
 
-    static void longPress(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y)
+    static void longPress(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y, jint metaState)
     {
         QAndroidInputContext *inputContext = QAndroidInputContext::androidInputContext();
 
@@ -249,12 +271,13 @@ namespace QtAndroidInput
 
         // Click right button if no other button is already pressed.
         if (!m_mouseGrabber) {
+            Qt::KeyboardModifiers modifiers = mapAndroidModifiers(metaState);
             QWindowSystemInterface::handleMouseEvent(window, localPos, globalPos,
                                                      Qt::MouseButtons(Qt::RightButton), Qt::RightButton,
-                                                     QEvent::MouseButtonPress);
+                                                     QEvent::MouseButtonPress, modifiers);
             QWindowSystemInterface::handleMouseEvent(window, localPos, globalPos,
                                                      Qt::MouseButtons(Qt::NoButton), Qt::RightButton,
-                                                     QEvent::MouseButtonRelease);
+                                                     QEvent::MouseButtonRelease, modifiers);
         }
     }
 
@@ -345,7 +368,7 @@ namespace QtAndroidInput
         return touchDevice;
     }
 
-    static void touchEnd(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jint /*action*/)
+    static void touchEnd(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jint /*action*/, jint metaState)
     {
         if (m_touchPoints.isEmpty())
             return;
@@ -358,10 +381,10 @@ namespace QtAndroidInput
         QWindow *window = QtAndroid::windowFromId(winId);
         if (!window)
             return;
-        QWindowSystemInterface::handleTouchEvent(window, touchDevice, m_touchPoints);
+        QWindowSystemInterface::handleTouchEvent(window, touchDevice, m_touchPoints, mapAndroidModifiers(metaState));
     }
 
-    static void touchCancel(JNIEnv * /*env*/, jobject /*thiz*/, jint winId)
+    static void touchCancel(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jint metaState)
     {
         if (m_touchPoints.isEmpty())
             return;
@@ -374,7 +397,7 @@ namespace QtAndroidInput
         QWindow *window = QtAndroid::windowFromId(winId);
         if (!window)
             return;
-        QWindowSystemInterface::handleTouchCancelEvent(window, touchDevice);
+        QWindowSystemInterface::handleTouchCancelEvent(window, touchDevice, mapAndroidModifiers(metaState));
     }
 
     static bool isTabletEventSupported(JNIEnv */*env*/, jobject /*thiz*/)
@@ -387,7 +410,7 @@ namespace QtAndroidInput
     }
 
     static void tabletEvent(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint deviceId, jlong time, jint action,
-        jint pointerType, jint buttonState, jfloat x, jfloat y, jfloat pressure)
+        jint pointerType, jint buttonState, jfloat x, jfloat y, jfloat pressure, jint metaState)
     {
 #if QT_CONFIG(tabletevent)
         const QPointF localPos(x, y);
@@ -429,7 +452,7 @@ namespace QtAndroidInput
 
         QWindowSystemInterface::handleTabletEvent(window, ulong(time),
             localPos, globalPosF, int(QInputDevice::DeviceType::Stylus), pointerType,
-            buttons, pressure, 0, 0, 0., 0., 0, deviceId, Qt::NoModifier);
+            buttons, pressure, 0, 0, 0., 0., 0, deviceId, mapAndroidModifiers(metaState));
 #endif // QT_CONFIG(tabletevent)
     }
 
@@ -840,25 +863,6 @@ namespace QtAndroidInput
         }
     }
 
-    static Qt::KeyboardModifiers mapAndroidModifiers(jint modifiers)
-    {
-        Qt::KeyboardModifiers qmodifiers;
-
-        if (modifiers & 0x00000001) // META_SHIFT_ON
-            qmodifiers |= Qt::ShiftModifier;
-
-        if (modifiers & 0x00000002) // META_ALT_ON
-            qmodifiers |= Qt::AltModifier;
-
-        if (modifiers & 0x00000004) // META_SYM_ON
-            qmodifiers |= Qt::MetaModifier;
-
-        if (modifiers & 0x00001000) // META_CTRL_ON
-            qmodifiers |= Qt::ControlModifier;
-
-        return qmodifiers;
-    }
-
     // maps 0 to the empty string, and anything else to a single-character string
     static inline QString toString(jint unicode)
     {
@@ -928,15 +932,15 @@ namespace QtAndroidInput
     static const JNINativeMethod methods[] = {
         {"touchBegin","(I)V",(void*)touchBegin},
         {"touchAdd","(IIIZIIFFFF)V",(void*)touchAdd},
-        {"touchEnd","(II)V",(void*)touchEnd},
-        {"touchCancel", "(I)V", (void *)touchCancel},
-        {"mouseDown", "(IIII)V", (void *)mouseDown},
-        {"mouseUp", "(IIII)V", (void *)mouseUp},
-        {"mouseMove", "(IIII)V", (void *)mouseMove},
-        {"mouseWheel", "(IIIFF)V", (void *)mouseWheel},
-        {"longPress", "(III)V", (void *)longPress},
+        {"touchEnd","(III)V",(void*)touchEnd},
+        {"touchCancel", "(II)V", (void *)touchCancel},
+        {"mouseDown", "(IIIII)V", (void *)mouseDown},
+        {"mouseUp", "(IIIII)V", (void *)mouseUp},
+        {"mouseMove", "(IIIII)V", (void *)mouseMove},
+        {"mouseWheel", "(IIIFFI)V", (void *)mouseWheel},
+        {"longPress", "(IIII)V", (void *)longPress},
         {"isTabletEventSupported", "()Z", (void *)isTabletEventSupported},
-        {"tabletEvent", "(IIJIIIFFF)V", (void *)tabletEvent},
+        {"tabletEvent", "(IIJIIIFFFI)V", (void *)tabletEvent},
         {"keyDown", "(IIIZ)V", (void *)keyDown},
         {"keyUp", "(IIIZ)V", (void *)keyUp},
         {"keyboardVisibilityChanged", "(Z)V", (void *)keyboardVisibilityChanged},
