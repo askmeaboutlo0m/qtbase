@@ -108,7 +108,16 @@ namespace QtAndroidInput
     };
     Q_DECLARE_FLAGS(AndroidMouseButtons, AndroidMouseButton)
 
-    static Qt::MouseButtons toMouseButtons(jint j_buttons)
+    // Special handling for buttons coming from styluses: they press down the
+    // left button when the tip is down, not in reaction to an actual button.
+    // It'd be nonsense to give two ways to perform a left click and no way to
+    // actually make use of the side buttons, so the BUTTON_STYLUS_PRIMARY for
+    // tablet events gets mapped to the more useful middle button. This would in
+    // turn give a duplicate middle mouse button on e.g. a Wacom Movinkpad where
+    // the third stylus button emits a BUTTON_TERTIARY, so that gets mapped to
+    // Qt:TaskButton instead. Mice shouldn't be emitting stylus button inputs,
+    // so they just get mapped to regular primary and secondary mouse buttons.
+    static Qt::MouseButtons toMouseButtons(jint j_buttons, bool tablet = false)
     {
         const auto buttons = static_cast<AndroidMouseButtons>(j_buttons);
         Qt::MouseButtons mouseButtons;
@@ -119,7 +128,7 @@ namespace QtAndroidInput
             mouseButtons.setFlag(Qt::RightButton);
 
         if (buttons.testFlag(BUTTON_TERTIARY))
-            mouseButtons.setFlag(Qt::MiddleButton);
+            mouseButtons.setFlag(tablet ? Qt::TaskButton : Qt::MiddleButton);
 
         if (buttons.testFlag(BUTTON_BACK))
             mouseButtons.setFlag(Qt::BackButton);
@@ -128,7 +137,7 @@ namespace QtAndroidInput
             mouseButtons.setFlag(Qt::ForwardButton);
 
         if (buttons.testFlag(BUTTON_STYLUS_PRIMARY))
-            mouseButtons.setFlag(Qt::LeftButton);
+            mouseButtons.setFlag(tablet ? Qt::MiddleButton : Qt::LeftButton);
 
         if (buttons.testFlag(BUTTON_STYLUS_SECONDARY))
             mouseButtons.setFlag(Qt::RightButton);
@@ -413,7 +422,7 @@ namespace QtAndroidInput
                                                        mapAndroidModifiers(metaState));
     }
 
-    static bool isTabletEventSupported(JNIEnv */*env*/, jobject /*thiz*/)
+    static bool isTabletEventSupported(JNIEnv * /*env*/, jobject /*thiz*/)
     {
 #if QT_CONFIG(tabletevent)
         return true;
@@ -422,50 +431,87 @@ namespace QtAndroidInput
 #endif // QT_CONFIG(tabletevent)
     }
 
-    static void tabletEvent(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint deviceId, jlong time, jint action,
-        jint pointerType, jint buttonState, jfloat x, jfloat y, jfloat pressure, jint metaState)
+    // From https://developer.android.com/reference/android/view/MotionEvent#constants_1
+    enum AndroidMotionEventAction {
+        ACTION_DOWN = 0x00000000,
+        ACTION_UP = 0x00000001,
+        ACTION_MOVE = 0x00000002,
+        ACTION_CANCEL = 0x00000003,
+        ACTION_HOVER_MOVE = 0x00000007,
+        ACTION_HOVER_ENTER = 0x00000009,
+        ACTION_HOVER_EXIT = 0x0000000a,
+    };
+
+    static void tabletEvent(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jint deviceId,
+                            jlong time, jint action, jint pointerType, jint buttonState, jfloat x,
+                            jfloat y, jfloat pressure, jfloat orientation, jfloat tilt,
+                            jfloat rotation, jint metaState)
     {
 #if QT_CONFIG(tabletevent)
-        const QPointF localPos(x, y);
-        QWindow *window = windowFromId(winId);
-        const QPointF globalPosF = window && window->handle() ?
-                                    window->handle()->mapFromGlobalF(localPos) : localPos;
-
-        // Galaxy Note with plain Android:
-        // 0 1 0    stylus press
-        // 2 1 0    stylus drag
-        // 1 1 0    stylus release
-        // 0 1 2    stylus press with side-button held
-        // 2 1 2    stylus drag with side-button held
-        // 1 1 2    stylus release with side-button held
-        // Galaxy Note 4 with Samsung firmware:
-        // 0 1 0    stylus press
-        // 2 1 0    stylus drag
-        // 1 1 0    stylus release
-        // 211 1 2  stylus press with side-button held
-        // 213 1 2  stylus drag with side-button held
-        // 212 1 2  stylus release with side-button held
-        // when action == ACTION_UP (1) it's a release; otherwise we say which button is pressed
-        Qt::MouseButtons buttons = Qt::NoButton;
+        QWindow *window;
         switch (action) {
-        case 1:     // ACTION_UP
-        case 6:     // ACTION_POINTER_UP, happens if stylus is not the primary pointer
-        case 212:   // stylus release while side-button held on Galaxy Note 4
-            buttons = Qt::NoButton;
+        case jint(ACTION_HOVER_ENTER):
+            QWindowSystemInterface::handleTabletEnterProximityEvent(
+                    ulong(time), int(QInputDevice::DeviceType::Stylus), pointerType, deviceId);
+            return;
+        case jint(ACTION_HOVER_EXIT):
+            QWindowSystemInterface::handleTabletLeaveProximityEvent(
+                    ulong(time), int(QInputDevice::DeviceType::Stylus), pointerType, deviceId);
+            return;
+        case jint(ACTION_DOWN):
+            window = windowFromId(winId);
+            m_mouseGrabber = window;
             break;
-        default:    // action is press or drag
-            if (buttonState == 0)
-                buttons = Qt::LeftButton;
-            else // 2 means RightButton
-                buttons = Qt::MouseButtons(buttonState);
+        default:
+            window = m_mouseGrabber.data();
+            if (!window) {
+                window = windowFromId(winId);
+            }
             break;
         }
 
-        qCDebug(lcQpaInputMethods) << action << pointerType << buttonState << '@' << x << y << "pressure" << pressure << ": buttons" << buttons;
+        const QPointF localPos(x, y);
+        const QPointF globalPosF =
+                window && window->handle() ? window->handle()->mapFromGlobalF(localPos) : localPos;
 
-        QWindowSystemInterface::handleTabletEvent(window, ulong(time),
-            localPos, globalPosF, int(QInputDevice::DeviceType::Stylus), pointerType,
-            buttons, pressure, 0, 0, 0., 0., 0, deviceId, mapAndroidModifiers(metaState));
+        switch (action) {
+        case jint(ACTION_UP):
+        case jint(ACTION_CANCEL):
+            buttonState = 0;
+            m_mouseGrabber.clear();
+            break;
+        case jint(ACTION_DOWN):
+        case jint(ACTION_MOVE):
+            // Doesn't make sense in Qt to press a stylus down but not have it
+            // result in a pressed mouse button, so we press the left button if
+            // that's the case.
+            if (buttonState == 0) {
+                buttonState = jint(BUTTON_PRIMARY);
+            }
+            break;
+        default:
+            break;
+        }
+
+        Qt::MouseButtons buttons = toMouseButtons(buttonState, true);
+
+        // Android presents tilt with AXIS_ORIENTATION for the direction of the
+        // tilt and AXIS_TILT for how far tilted it is, in radians. Translate
+        // that to Qt's representation of X and Y tilt in degrees, limited to
+        // QTabletEvent's documented range.
+        qreal tiltX =
+                qBound(-60.0, qRadiansToDegrees(-qSin(qreal(orientation)) * qreal(tilt)), 60.0);
+        qreal tiltY =
+                qBound(-60.0, qRadiansToDegrees(qCos(qreal(orientation)) * qreal(tilt)), 60.0);
+
+        qCDebug(lcQpaInputMethods)
+                << action << pointerType << buttonState << '@' << x << y << "pressure" << pressure
+                << "tilt" << tiltX << tiltY << "rotation" << rotation << ": buttons" << buttons;
+
+        QWindowSystemInterface::handleTabletEvent(
+                window, ulong(time), localPos, globalPosF, int(QInputDevice::DeviceType::Stylus),
+                pointerType, buttons, pressure, tiltX, tiltY, 0., rotation, 0, deviceId,
+                mapAndroidModifiers(metaState));
 #endif // QT_CONFIG(tabletevent)
     }
 
@@ -953,7 +999,7 @@ namespace QtAndroidInput
         {"mouseWheel", "(IIIFFI)V", (void *)mouseWheel},
         {"longPress", "(IIII)V", (void *)longPress},
         {"isTabletEventSupported", "()Z", (void *)isTabletEventSupported},
-        {"tabletEvent", "(IIJIIIFFFI)V", (void *)tabletEvent},
+        {"tabletEvent", "(IIJIIIFFFFFFI)V", (void *)tabletEvent},
         {"keyDown", "(IIIZ)V", (void *)keyDown},
         {"keyUp", "(IIIZ)V", (void *)keyUp},
         {"keyboardVisibilityChanged", "(Z)V", (void *)keyboardVisibilityChanged},

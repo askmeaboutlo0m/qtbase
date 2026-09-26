@@ -570,7 +570,8 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
     static native boolean isTabletEventSupported();
     static native void tabletEvent(int winId, int deviceId, long time, int action,
                                           int pointerType, int buttonState, float x, float y,
-                                          float pressure, int metaState);
+                                          float pressure, float orientation, float tilt, float rz,
+                                          int metaState);
     // tablet methods
 
     // pointer methods
@@ -614,29 +615,50 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
         return 2;
     }
 
+    private static int getPointerType(MotionEvent event)
+    {
+        switch (event.getToolType(0)) {
+            case MotionEvent.TOOL_TYPE_STYLUS:
+                return 1; // QTabletEvent::Pen
+            case MotionEvent.TOOL_TYPE_ERASER:
+                return 3; // QTabletEvent::Eraser
+            default:
+                return 0;
+        }
+    }
+
+    private static float getStylusRotation(MotionEvent event)
+    {
+        // In Android, the stylus barrel rotation is measured by the RZ axis on
+        // e.g. the Wacom Art Pen 2. The value is measured in radians from the
+        // bottom though, whereas QTabletEvent's rotation property measures
+        // degrees from the top, so we have to map it accordingly. On styluses
+        // that don't support barrel rotation, we return zero, rather than
+        // blindly mapping the default zero axis value to 180 for every event.
+        InputDevice device = event.getDevice();
+        if (device != null) {
+            InputDevice.MotionRange range = device.getMotionRange(MotionEvent.AXIS_RZ);
+            if (range != null) {
+                float rz = event.getAxisValue(MotionEvent.AXIS_RZ);
+                // This is equivalent to std::remainder in C++. It results in
+                // values between -180 and 180, which is QTabletEvent's range.
+                return (float) Math.IEEEremainder(Math.toDegrees(rz) + 180.0, 360.0);
+            }
+        }
+        return 0.0f;
+    }
+
     static void sendTouchEvent(MotionEvent event, int id)
     {
-        int pointerType = 0;
-
         if (m_tabletEventSupported == null)
             m_tabletEventSupported = isTabletEventSupported();
 
-        switch (event.getToolType(0)) {
-            case MotionEvent.TOOL_TYPE_STYLUS:
-                pointerType = 1; // QTabletEvent::Pen
-                break;
-            case MotionEvent.TOOL_TYPE_ERASER:
-                pointerType = 3; // QTabletEvent::Eraser
-                break;
-        }
+        int pointerType = getPointerType(event);
 
         if (event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE) {
             sendMouseEvent(event, id);
         } else if (m_tabletEventSupported && pointerType != 0) {
-            tabletEvent(id, event.getDeviceId(), event.getEventTime(), event.getActionMasked(),
-                    pointerType, event.getButtonState(),
-                    event.getX(), event.getY(), event.getPressure(),
-                    event.getMetaState());
+            sendTabletEvent(event, id, pointerType);
         } else {
             touchBegin(id);
             for (int i = 0; i < event.getPointerCount(); ++i) {
@@ -678,6 +700,15 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
 
     static boolean sendGenericMotionEvent(MotionEvent event, int id)
     {
+        if (m_tabletEventSupported == null) {
+            m_tabletEventSupported = isTabletEventSupported();
+        }
+
+        int pointerType = getPointerType(event);
+        if (m_tabletEventSupported && pointerType != 0) {
+            return sendTabletEvent(event, id, pointerType);
+        }
+
         int scrollOrHoverMove = MotionEvent.ACTION_SCROLL | MotionEvent.ACTION_HOVER_MOVE;
         int pointerDeviceModifier = (event.getSource() & InputDevice.SOURCE_CLASS_POINTER);
         boolean isPointerDevice = pointerDeviceModifier == InputDevice.SOURCE_CLASS_POINTER;
@@ -719,14 +750,43 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
                 }
                 break;
             case MotionEvent.ACTION_SCROLL:
-                mouseWheel(id, (int) event.getX(), (int) event.getY(),
-                        event.getAxisValue(MotionEvent.AXIS_HSCROLL),
-                        event.getAxisValue(MotionEvent.AXIS_VSCROLL),
-                        event.getMetaState());
-                break;
+                return sendWheelEvent(event, id);
             default:
                 return false;
         }
+        return true;
+    }
+
+    private static boolean sendTabletEvent(MotionEvent event, int id, int pointerType)
+    {
+        int action = event.getActionMasked();
+        switch (action) {
+            case MotionEvent.ACTION_CANCEL:
+            case MotionEvent.ACTION_DOWN:
+            case MotionEvent.ACTION_HOVER_ENTER:
+            case MotionEvent.ACTION_HOVER_EXIT:
+            case MotionEvent.ACTION_HOVER_MOVE:
+            case MotionEvent.ACTION_MOVE:
+            case MotionEvent.ACTION_UP:
+                tabletEvent(id, event.getDeviceId(), event.getEventTime(), action,
+                        pointerType, event.getButtonState(), event.getX(), event.getY(),
+                        event.getPressure(), event.getAxisValue(MotionEvent.AXIS_ORIENTATION),
+                        event.getAxisValue(MotionEvent.AXIS_TILT), getStylusRotation(event),
+                        event.getMetaState());
+                return true;
+            case MotionEvent.ACTION_SCROLL:
+                return sendWheelEvent(event, id);
+            default:
+                return false;
+        }
+    }
+
+    private static boolean sendWheelEvent(MotionEvent event, int id)
+    {
+        mouseWheel(id, (int) event.getX(), (int) event.getY(),
+                event.getAxisValue(MotionEvent.AXIS_HSCROLL),
+                event.getAxisValue(MotionEvent.AXIS_VSCROLL),
+                event.getMetaState());
         return true;
     }
 }
