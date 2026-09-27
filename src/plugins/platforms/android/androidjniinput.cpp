@@ -172,8 +172,9 @@ namespace QtAndroidInput
         return qmodifiers;
     }
 
-    static void sendMouseButtonEvents(QWindow *topLevel, QPoint localPos, QPoint globalPos,
-                                      jint mouseButtonState, jint metaState, QEvent::Type type)
+    static void sendMouseButtonEvents(QWindow * topLevel, QPoint localPos, QPoint globalPos,
+                                      jlong time, jint mouseButtonState, jint metaState,
+                                      QEvent::Type type)
     {
         const Qt::MouseButtons qtButtons = toMouseButtons(mouseButtonState);
         const bool mouseReleased = type == QEvent::MouseButtonRelease && qtButtons == Qt::NoButton;
@@ -189,14 +190,14 @@ namespace QtAndroidInput
         for (uint buttonInt = 0x1; static_cast<uint>(eventButtons) >= buttonInt; buttonInt <<= 1) {
             const auto button = static_cast<Qt::MouseButton>(buttonInt);
             if (eventButtons.testFlag(button)) {
-                QWindowSystemInterface::handleMouseEvent(topLevel, localPos, globalPos,
+                QWindowSystemInterface::handleMouseEvent(topLevel, ulong(time), localPos, globalPos,
                                                          qtButtons, button, type, modifiers);
             }
         }
     }
 
-    static void mouseDown(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y,
-                          jint mouseButtonState, jint metaState)
+    static void mouseDown(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jlong time, jint x,
+                          jint y, jint mouseButtonState, jint metaState)
     {
         if (m_ignoreMouseEvents)
             return;
@@ -206,11 +207,11 @@ namespace QtAndroidInput
         m_mouseGrabber = window;
         const QPoint globalPos = window && window->handle() ?
                 window->handle()->mapToGlobal(localPos) : localPos;
-        sendMouseButtonEvents(window, localPos, globalPos, mouseButtonState, metaState,
+        sendMouseButtonEvents(window, localPos, globalPos, time, mouseButtonState, metaState,
                               QEvent::MouseButtonPress);
     }
 
-    static void mouseUp(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y,
+    static void mouseUp(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jlong time, jint x, jint y,
                         jint mouseButtonState, jint metaState)
     {
         const QPoint localPos(x,y);
@@ -221,14 +222,14 @@ namespace QtAndroidInput
         const QPoint globalPos = window && window->handle() ?
                                     window->handle()->mapToGlobal(localPos) : localPos;
 
-        sendMouseButtonEvents(window, localPos, globalPos, mouseButtonState, metaState,
+        sendMouseButtonEvents(window, localPos, globalPos, time, mouseButtonState, metaState,
                               QEvent::MouseButtonRelease);
         m_ignoreMouseEvents = false;
         m_mouseGrabber.clear();
     }
 
-    static void mouseMove(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y,
-                          jint mouseButtonState, jint metaState)
+    static void mouseMove(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jlong time, jint x,
+                          jint y, jint mouseButtonState, jint metaState)
     {
         if (m_ignoreMouseEvents)
             return;
@@ -241,13 +242,14 @@ namespace QtAndroidInput
                                     window->handle()->mapToGlobal(localPos) : localPos;
         const Qt::MouseButtons qtButtons = toMouseButtons(mouseButtonState);
         m_lastSeenButtons = qtButtons;
-        QWindowSystemInterface::handleMouseEvent(window, localPos, globalPos,
+
+        QWindowSystemInterface::handleMouseEvent(window, ulong(time), localPos, globalPos,
                                                  qtButtons, Qt::NoButton, QEvent::MouseMove,
                                                  mapAndroidModifiers(metaState));
     }
 
-    static void mouseWheel(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y,
-                           jfloat hdelta, jfloat vdelta, jint metaState)
+    static void mouseWheel(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jlong time, jint x,
+                           jint y, jfloat hdelta, jfloat vdelta, jint metaState)
     {
         if (m_ignoreMouseEvents)
             return;
@@ -260,12 +262,8 @@ namespace QtAndroidInput
                                     window->handle()->mapToGlobal(localPos) : localPos;
         const QPoint angleDelta(hdelta * 120, vdelta * 120);
 
-        QWindowSystemInterface::handleWheelEvent(window,
-                                                 localPos,
-                                                 globalPos,
-                                                 QPoint(),
-                                                 angleDelta,
-                                                 mapAndroidModifiers(metaState));
+        QWindowSystemInterface::handleWheelEvent(window, ulong(time), localPos, globalPos, QPoint(),
+                                                 angleDelta, mapAndroidModifiers(metaState));
     }
 
     static void longPress(JNIEnv */*env*/, jobject /*thiz*/, jint winId, jint x, jint y,
@@ -387,8 +385,8 @@ namespace QtAndroidInput
         return touchDevice;
     }
 
-    static void touchEnd(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jint /*action*/,
-                         jint metaState)
+    static void touchEnd(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jlong time,
+                         jint /*action*/, jint metaState)
     {
         if (m_touchPoints.isEmpty())
             return;
@@ -401,11 +399,12 @@ namespace QtAndroidInput
         QWindow *window = QtAndroid::windowFromId(winId);
         if (!window)
             return;
-        QWindowSystemInterface::handleTouchEvent(window, touchDevice,
-                                                 m_touchPoints, mapAndroidModifiers(metaState));
+        QWindowSystemInterface::handleTouchEvent(window, ulong(time), touchDevice, m_touchPoints,
+                                                 mapAndroidModifiers(metaState));
     }
 
-    static void touchCancel(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jint metaState)
+    static void touchCancel(JNIEnv * /*env*/, jobject /*thiz*/, jint winId, jlong time,
+                            jint metaState)
     {
         if (m_touchPoints.isEmpty())
             return;
@@ -418,7 +417,7 @@ namespace QtAndroidInput
         QWindow *window = QtAndroid::windowFromId(winId);
         if (!window)
             return;
-        QWindowSystemInterface::handleTouchCancelEvent(window, touchDevice,
+        QWindowSystemInterface::handleTouchCancelEvent(window, ulong(time), touchDevice,
                                                        mapAndroidModifiers(metaState));
     }
 
@@ -991,12 +990,12 @@ namespace QtAndroidInput
     static const JNINativeMethod methods[] = {
         {"touchBegin","(I)V",(void*)touchBegin},
         {"touchAdd","(IIIZIIFFFF)V",(void*)touchAdd},
-        {"touchEnd","(III)V",(void*)touchEnd},
-        {"touchCancel", "(II)V", (void *)touchCancel},
-        {"mouseDown", "(IIIII)V", (void *)mouseDown},
-        {"mouseUp", "(IIIII)V", (void *)mouseUp},
-        {"mouseMove", "(IIIII)V", (void *)mouseMove},
-        {"mouseWheel", "(IIIFFI)V", (void *)mouseWheel},
+        {"touchEnd","(IJII)V",(void*)touchEnd},
+        {"touchCancel", "(IJI)V", (void *)touchCancel},
+        {"mouseDown", "(IJIIII)V", (void *)mouseDown},
+        {"mouseUp", "(IJIIII)V", (void *)mouseUp},
+        {"mouseMove", "(IJIIII)V", (void *)mouseMove},
+        {"mouseWheel", "(IJIIFFI)V", (void *)mouseWheel},
         {"longPress", "(IIII)V", (void *)longPress},
         {"isTabletEventSupported", "()Z", (void *)isTabletEventSupported},
         {"tabletEvent", "(IIJIIIFFFFFFI)V", (void *)tabletEvent},

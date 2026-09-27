@@ -3,7 +3,9 @@
 
 package org.qtproject.qt.android;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Rect;
@@ -33,6 +35,12 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
 {
 
     private static final String TAG = "QtInputDelegate";
+
+    // After how many subsequent messages with a good or bad position history
+    // the device will be regarded as always producing good or bad histories.
+    // The situation tends to be very clear, so a low value like this is fine.
+    private static final int HISTORY_QUALITY_THRESHOLD = 16;
+
     // keyboard methods
     static native void keyDown(int key, int unicode, int modifier, boolean autoRepeat);
     static native void keyUp(int key, int unicode, int modifier, boolean autoRepeat);
@@ -69,6 +77,7 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
     private static Boolean m_tabletEventSupported = null;
 
     private static int m_oldX, m_oldY;
+    private static Map<Integer, Integer> m_historyQualities = new HashMap<>();
 
 
     private long m_metaState;
@@ -575,16 +584,16 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
     // tablet methods
 
     // pointer methods
-    static native void mouseDown(int winId, int x, int y, int mouseButtonState, int metaState);
-    static native void mouseUp(int winId, int x, int y, int mouseButtonState, int metaState);
-    static native void mouseMove(int winId, int x, int y, int mouseButtonState, int metaState);
-    static native void mouseWheel(int winId, int x, int y, float hDelta, float vDelta, int metaState);
+    static native void mouseDown(int winId, long time, int x, int y, int mouseButtonState, int metaState);
+    static native void mouseUp(int winId, long time, int x, int y, int mouseButtonState, int metaState);
+    static native void mouseMove(int winId, long time, int x, int y, int mouseButtonState, int metaState);
+    static native void mouseWheel(int winId, long time, int x, int y, float hDelta, float vDelta, int metaState);
     static native void touchBegin(int winId);
     static native void touchAdd(int winId, int pointerId, int action, boolean primary,
                                        int x, int y, float major, float minor, float rotation,
                                        float pressure);
-    static native void touchEnd(int winId, int action, int metaState);
-    static native void touchCancel(int winId, int metaState);
+    static native void touchEnd(int winId, long time, int action, int metaState);
+    static native void touchCancel(int winId, long time, int metaState);
     static native void longPress(int winId, int x, int y, int metaState);
     // pointer methods
 
@@ -592,18 +601,7 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
     {
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_MOVE) {
-            int hsz = event.getHistorySize();
-            if (hsz > 0) {
-                float x = event.getX(index);
-                float y = event.getY(index);
-                for (int h = 0; h < hsz; ++h) {
-                    if ( event.getHistoricalX(index, h) != x ||
-                            event.getHistoricalY(index, h) != y )
-                        return 1;
-                }
-                return 2;
-            }
-            return 1;
+            return getMoveAction(index, event);
         }
         if (action == MotionEvent.ACTION_DOWN
                 || action == MotionEvent.ACTION_POINTER_DOWN && index == event.getActionIndex()) {
@@ -613,6 +611,22 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
             return 3;
         }
         return 2;
+    }
+
+    private static int getMoveAction(int index, MotionEvent event)
+    {
+        int hsz = event.getHistorySize();
+        if (hsz > 0) {
+            float x = event.getX(index);
+            float y = event.getY(index);
+            for (int h = 0; h < hsz; ++h) {
+                if (event.getHistoricalX(index, h) != x || event.getHistoricalY(index, h) != y) {
+                    return 1;
+                }
+            }
+            return 2;
+        }
+        return 1;
     }
 
     private static int getPointerType(MotionEvent event)
@@ -627,7 +641,7 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
         }
     }
 
-    private static float getStylusRotation(MotionEvent event)
+    private static float getStylusRotation(MotionEvent event, int historyIndex)
     {
         // In Android, the stylus barrel rotation is measured by the RZ axis on
         // e.g. the Wacom Art Pen 2. The value is measured in radians from the
@@ -639,13 +653,99 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
         if (device != null) {
             InputDevice.MotionRange range = device.getMotionRange(MotionEvent.AXIS_RZ);
             if (range != null) {
-                float rz = event.getAxisValue(MotionEvent.AXIS_RZ);
+                float rz;
+                if (historyIndex < 0) {
+                    rz = event.getAxisValue(MotionEvent.AXIS_RZ);
+                } else {
+                    rz = event.getHistoricalAxisValue(MotionEvent.AXIS_RZ, historyIndex);
+                }
                 // This is equivalent to std::remainder in C++. It results in
                 // values between -180 and 180, which is QTabletEvent's range.
                 return (float) Math.IEEEremainder(Math.toDegrees(rz) + 180.0, 360.0);
             }
         }
         return 0.0f;
+    }
+
+    private static boolean hasValidHistory(MotionEvent event)
+    {
+        // The historical events are *supposed* to tell us intermediate inputs
+        // from an input device that arrived between the last handled event and
+        // this one. That's really good for accuracy when scrolling or drawing,
+        // but unfortunately many devices just lie about the history. Instead of
+        // real positions, they just linearly interpolate them, leading to very
+        // wrong results in the application. We can detect such devices really
+        // reliably by checking if the points it gives us are on a straight-ish
+        // line. Well-behaved devices will have a significant deviation.
+        int historySize = event.getHistorySize();
+        if (historySize > 1) {
+            // Once we have enough good or bad samples, we'll just assume that
+            // the device in question is generally good or bad.
+            int deviceId = event.getDeviceId();
+            int quality = getHistoryQuality(deviceId);
+            if (quality >= HISTORY_QUALITY_THRESHOLD) {
+                return true;
+            } else if (quality <= -HISTORY_QUALITY_THRESHOLD) {
+                return false;
+            }
+
+            // Two points will always form a straight line, so we can't check
+            // anything meaningful in this case.
+            if (historySize == 1) {
+                return true;
+            }
+
+            double x1 = event.getHistoricalX(0);
+            double y1 = event.getHistoricalY(0);
+            double x2 = event.getX();
+            double y2 = event.getY();
+
+            // If the points are really close to each other, there's no point
+            // doing any of this rigmarole, it's not going to be accurate.
+            double distance = Math.hypot(x2 - x1, y2 - y1);
+            if (distance < 4.0) {
+                return true;
+            }
+
+            double a = y2 - y1;
+            double b = x1 - x2;
+            double d = Math.sqrt(a * a + b * b);
+            if (d == 0.0) {
+                return true; // Avoid division by zero.
+            }
+
+            double c = (x2 * y1) - (y2 * x1);
+            for (int i = 1; i < historySize; ++i) {
+                double x = event.getHistoricalX(i);
+                double y = event.getHistoricalY(i);
+                double deviation = Math.abs((a * x) + (b * y ) + c) / d;
+                // A fudge factor of 0.001 seems safe, since good devices don't
+                // really go below 0.1 and bad devices not above around 0.0001.
+                if (deviation > 0.001) {
+                    setHistoryQuality(deviceId, quality + 1);
+                    return true;
+                }
+            }
+
+            setHistoryQuality(deviceId, quality - 1);
+        }
+        return false;
+    }
+
+    private static int getHistoryQuality(int deviceId)
+    {
+        Integer quality = m_historyQualities.get(deviceId);
+        return quality == null ? 0 : quality;
+    }
+
+    private static void setHistoryQuality(int deviceId, int quality)
+    {
+        m_historyQualities.put(deviceId, quality);
+        if (quality >= HISTORY_QUALITY_THRESHOLD) {
+            Log.w(TAG, "Device " + deviceId + " reached positive history quality threshold");
+        } else if (quality <= -HISTORY_QUALITY_THRESHOLD) {
+            Log.w(TAG, "Device " + deviceId + " reached negative history quality threshold");
+        }
     }
 
     static void sendTouchEvent(MotionEvent event, int id)
@@ -660,8 +760,31 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
         } else if (m_tabletEventSupported && pointerType != 0) {
             sendTabletEvent(event, id, pointerType);
         } else {
+            int action = event.getActionMasked();
+            int pointerCount = event.getPointerCount();
+            int metaState = event.getMetaState();
+            if (action == MotionEvent.ACTION_MOVE && hasValidHistory(event)) {
+                int historySize = event.getHistorySize();
+                for (int historyIndex = 0; historyIndex < historySize; ++historyIndex) {
+                    touchBegin(id);
+                    for (int i = 0; i < pointerCount; ++i) {
+                        touchAdd(id,
+                                event.getPointerId(i),
+                                getMoveAction(i, event),
+                                i == 0,
+                                (int)event.getHistoricalX(i, historyIndex),
+                                (int)event.getHistoricalY(i, historyIndex),
+                                event.getHistoricalTouchMajor(i, historyIndex),
+                                event.getHistoricalTouchMinor(i, historyIndex),
+                                event.getHistoricalOrientation(i, historyIndex),
+                                event.getHistoricalPressure(i, historyIndex));
+                    }
+                    touchEnd(id, event.getHistoricalEventTime(historyIndex), 1, metaState);
+                }
+            }
+
             touchBegin(id);
-            for (int i = 0; i < event.getPointerCount(); ++i) {
+            for (int i = 0; i < pointerCount; ++i) {
                 touchAdd(id,
                         event.getPointerId(i),
                         getAction(i, event),
@@ -674,21 +797,21 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
                         event.getPressure(i));
             }
 
-            switch (event.getAction()) {
+            switch (action) {
                 case MotionEvent.ACTION_DOWN:
-                    touchEnd(id, 0, event.getMetaState());
+                    touchEnd(id, event.getEventTime(), 0, metaState);
                     break;
 
                 case MotionEvent.ACTION_UP:
-                    touchEnd(id, 2, event.getMetaState());
+                    touchEnd(id, event.getEventTime(), 2, metaState);
                     break;
 
                 case MotionEvent.ACTION_CANCEL:
-                    touchCancel(id, event.getMetaState());
+                    touchCancel(id, event.getEventTime(), metaState);
                     break;
 
                 default:
-                    touchEnd(id, 1, event.getMetaState());
+                    touchEnd(id, event.getEventTime(), 1, metaState);
             }
         }
     }
@@ -723,31 +846,29 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
     {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_UP:
-                mouseUp(id, (int) event.getX(), (int) event.getY(), event.getButtonState(),
-                        event.getMetaState());
+                mouseUp(id, event.getEventTime(), (int) event.getX(), (int) event.getY(),
+                        event.getButtonState(), event.getMetaState());
                 break;
 
             case MotionEvent.ACTION_DOWN:
-                mouseDown(id, (int) event.getX(), (int) event.getY(), event.getButtonState(),
-                          event.getMetaState());
+                mouseDown(id, event.getEventTime(), (int) event.getX(), (int) event.getY(),
+                        event.getButtonState(), event.getMetaState());
                 m_oldX = (int) event.getX();
                 m_oldY = (int) event.getY();
                 break;
             case MotionEvent.ACTION_HOVER_MOVE:
+                sendMouseMoveEvent(event, id, -1);
+                break;
             case MotionEvent.ACTION_MOVE:
-                if (event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE) {
-                    mouseMove(id, (int) event.getX(), (int) event.getY(), event.getButtonState(),
-                              event.getMetaState());
-                } else {
-                    int dx = (int) (event.getX() - m_oldX);
-                    int dy = (int) (event.getY() - m_oldY);
-                    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-                        mouseMove(id, (int) event.getX(), (int) event.getY(), event.getButtonState(),
-                                  event.getMetaState());
-                        m_oldX = (int) event.getX();
-                        m_oldY = (int) event.getY();
+                // Move events are the only ones that can have a history. Some
+                // devices report a garbage history, see the comment above.
+                if (hasValidHistory(event)) {
+                    int historySize = event.getHistorySize();
+                    for (int historyIndex = 0; historyIndex < historySize; ++historyIndex) {
+                        sendMouseMoveEvent(event, id, historyIndex);
                     }
                 }
+                sendMouseMoveEvent(event, id, -1);
                 break;
             case MotionEvent.ACTION_SCROLL:
                 return sendWheelEvent(event, id);
@@ -757,21 +878,67 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
         return true;
     }
 
+    private static void sendMouseMoveEvent(MotionEvent event, int id, int historyIndex)
+    {
+        long time;
+        float x, y;
+        if (historyIndex < 0) {
+            time = event.getEventTime();
+            x = event.getX();
+            y = event.getY();
+        } else {
+            time = event.getHistoricalEventTime(historyIndex);
+            x = event.getHistoricalX(historyIndex);
+            y = event.getHistoricalY(historyIndex);
+        }
+
+        int ix = (int) x;
+        int iy = (int) y;
+        if (event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE) {
+            mouseMove(id, time, ix, iy, event.getButtonState(), event.getMetaState());
+        } else {
+            int dx = (int) (x - m_oldX);
+            int dy = (int) (y - m_oldY);
+            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                mouseMove(id, time, ix, iy, event.getButtonState(), event.getMetaState());
+                m_oldX = ix;
+                m_oldY = iy;
+            }
+        }
+    }
+
+    @SuppressWarnings("fallthrough")
     private static boolean sendTabletEvent(MotionEvent event, int id, int pointerType)
     {
         int action = event.getActionMasked();
         switch (action) {
+            case MotionEvent.ACTION_MOVE:
+                // Move events are the only ones that can have a history. Some
+                // devices report a garbage history, see the comment above.
+                if (hasValidHistory(event)) {
+                    int historySize = event.getHistorySize();
+                    for (int historyIndex = 0; historyIndex < historySize; ++historyIndex) {
+                        tabletEvent(id, event.getDeviceId(),
+                                event.getHistoricalEventTime(historyIndex), action, pointerType,
+                                event.getButtonState(), event.getHistoricalX(historyIndex),
+                                event.getHistoricalY(historyIndex),
+                                event.getHistoricalPressure(historyIndex),
+                                event.getHistoricalAxisValue(MotionEvent.AXIS_ORIENTATION, historyIndex),
+                                event.getHistoricalAxisValue(MotionEvent.AXIS_TILT, historyIndex),
+                                getStylusRotation(event, historyIndex), event.getMetaState());
+                    }
+                }
+                // Fallthrough.
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_HOVER_ENTER:
             case MotionEvent.ACTION_HOVER_EXIT:
             case MotionEvent.ACTION_HOVER_MOVE:
-            case MotionEvent.ACTION_MOVE:
             case MotionEvent.ACTION_UP:
                 tabletEvent(id, event.getDeviceId(), event.getEventTime(), action,
                         pointerType, event.getButtonState(), event.getX(), event.getY(),
                         event.getPressure(), event.getAxisValue(MotionEvent.AXIS_ORIENTATION),
-                        event.getAxisValue(MotionEvent.AXIS_TILT), getStylusRotation(event),
+                        event.getAxisValue(MotionEvent.AXIS_TILT), getStylusRotation(event, -1),
                         event.getMetaState());
                 return true;
             case MotionEvent.ACTION_SCROLL:
@@ -783,7 +950,7 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
 
     private static boolean sendWheelEvent(MotionEvent event, int id)
     {
-        mouseWheel(id, (int) event.getX(), (int) event.getY(),
+        mouseWheel(id, event.getEventTime(), (int) event.getX(), (int) event.getY(),
                 event.getAxisValue(MotionEvent.AXIS_HSCROLL),
                 event.getAxisValue(MotionEvent.AXIS_VSCROLL),
                 event.getMetaState());
