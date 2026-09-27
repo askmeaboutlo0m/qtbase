@@ -67,6 +67,7 @@ class QtEditText extends View
     private CursorHandle m_cursorHandle;
     private CursorHandle m_leftSelectionHandle;
     private CursorHandle m_rightSelectionHandle;
+    private boolean m_debugDrawEnabled = false;
 
     final private EditPopupMenu m_editPopupMenu;
 
@@ -77,6 +78,7 @@ class QtEditText extends View
         setFocusableInTouchMode(true);
         m_qtInputConnectionListener = listener;
         m_editPopupMenu = new EditPopupMenu(this);
+        updateDebugDrawEnabled();
     }
 
     private void setImeOptions(int imeOptions)
@@ -115,6 +117,7 @@ class QtEditText extends View
     @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs)
     {
+        updateDebugDrawEnabled();
         outAttrs.inputType = m_inputType;
         outAttrs.imeOptions = m_imeOptions;
         outAttrs.initialCapsMode = m_initialCapsMode;
@@ -146,14 +149,16 @@ class QtEditText extends View
 
     @Override
     protected void onDraw(Canvas canvas) {
-        // DEBUG CODE
-        // canvas.drawARGB(127, 255, 0, 255);
+        if (m_debugDrawEnabled) {
+            canvas.drawARGB(127, 255, 0, 255);
+        }
         super.onDraw(canvas);
     }
 
 
     void setEditTextOptions(int enterKeyType, int inputHints)
     {
+        updateDebugDrawEnabled();
         int initialCapsMode = 0;
         int imeOptions = imeOptionsFromEnterKeyType(enterKeyType);
         int inputType = android.text.InputType.TYPE_CLASS_TEXT;
@@ -274,6 +279,7 @@ class QtEditText extends View
     void updateHandles(int mode, int editX, int editY, int editButtons,
                        int x1, int y1, int x2, int y2, boolean rtl)
     {
+        updateDebugDrawEnabled();
         switch (mode & 0xff)
         {
         case CursorHandleNotShown:
@@ -341,5 +347,10 @@ class QtEditText extends View
     {
         return (inputHints & ImhNoPredictiveText) != 0 &&
                 System.getenv("QT_ANDROID_ENABLE_WORKAROUND_TO_DISABLE_PREDICTIVE_TEXT") != null;
+    }
+
+    private void updateDebugDrawEnabled()
+    {
+        m_debugDrawEnabled = System.getenv("KRITA_ANDROID_EDIT_TEXT_DEBUG_DRAW") != null;
     }
 }
