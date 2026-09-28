@@ -25,6 +25,7 @@ class QtEditText extends View
     int m_initialCapsMode = 0;
     int m_imeOptions = 0;
     int m_inputType = InputType.TYPE_CLASS_TEXT;
+    boolean m_enableEditMenu = true;
     boolean m_optionsChanged = false;
     QtInputConnection m_inputConnection = null;
 
@@ -36,6 +37,7 @@ class QtEditText extends View
     private final int ImhPreferUppercase = 0x10;
     private final int ImhPreferLowercase = 0x20;
     private final int ImhNoPredictiveText = 0x40;
+    private final int ImhNoEditMenu = 0x800;
 
     private final int ImhDate = 0x80;
     private final int ImhTime = 0x100;
@@ -99,6 +101,14 @@ class QtEditText extends View
         if (m_inputType == inputType)
             return;
         m_inputType = inputType;
+        m_optionsChanged = true;
+    }
+
+    private void setEnableEditMenu(boolean enableEditMenu)
+    {
+        if (m_enableEditMenu == enableEditMenu)
+            return;
+        m_enableEditMenu = enableEditMenu;
         m_optionsChanged = true;
     }
 
@@ -206,6 +216,7 @@ class QtEditText extends View
         setInitialCapsMode(initialCapsMode);
         setImeOptions(imeOptions);
         setInputType(inputType);
+        setEnableEditMenu((inputHints & ImhNoEditMenu) == 0);
     }
 
     private int imeOptionsFromEnterKeyType(int enterKeyType)
@@ -317,7 +328,8 @@ class QtEditText extends View
         if (!QtClipboardManager.hasClipboardText(getContext()))
             editButtons &= ~EditContextView.PASTE_BUTTON;
 
-        final boolean setEditPopupPosition = (mode & QtEditText.CursorHandleShowEdit) ==
+        final boolean setEditPopupPosition = m_enableEditMenu &&
+                                             (mode & QtEditText.CursorHandleShowEdit) ==
                                              QtEditText.CursorHandleShowEdit && editButtons != 0;
         if (setEditPopupPosition)
             m_editPopupMenu.setPosition(editX, editY, editButtons);
