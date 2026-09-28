@@ -1047,6 +1047,11 @@ void QCoreApplication::setKritaAttribute(unsigned int attribute, bool on)
     } else {
         QCoreApplicationPrivate::kritaAttribs &= ~(1 << attribute);
     }
+#ifdef Q_OS_ANDROID
+    if (attribute == KRITA_QATTRIBUTE_ANDROID_DEBUG_INPUT_EVENTS) {
+         QNativeInterface::QAndroidApplication::setDebugInputEvents(on);
+    }
+#endif
 }
 
 bool QCoreApplication::testKritaAttribute(unsigned int attribute)

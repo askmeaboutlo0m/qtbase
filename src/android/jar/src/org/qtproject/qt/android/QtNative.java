@@ -329,6 +329,12 @@ public class QtNative
     }
 
     @UsedFromNativeCode
+    public static void setDebugInputEvents(boolean debugInputEvents)
+    {
+        QtInputDelegate.debugInputEvents = debugInputEvents;
+    }
+
+    @UsedFromNativeCode
     private static void runPendingCppRunnablesOnAndroidThread()
     {
         synchronized (m_mainActivityMutex) {

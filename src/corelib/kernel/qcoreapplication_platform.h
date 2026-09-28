@@ -46,6 +46,7 @@ struct Q_CORE_EXPORT QAndroidApplication
     static bool isActivityContext();
     static int sdkVersion();
     static void hideSplashScreen(int duration = 0);
+    static void setDebugInputEvents(bool debugInputEvents);
 
 #if QT_CONFIG(future) && !defined(QT_NO_QOBJECT)
     static QFuture<QVariant> runOnAndroidMainThread(const std::function<QVariant()> &runnable,

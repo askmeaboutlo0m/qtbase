@@ -57,6 +57,9 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
     static native void handleLocationChanged(int id, int x, int y);
     // handle methods
 
+    static native void debugMotionEvent(MotionEvent event);
+    static boolean debugInputEvents = false;
+
     private QtEditText m_currentEditText = null;
     private InputMethodManager m_imm;
 
@@ -767,6 +770,10 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
 
     static void sendTouchEvent(MotionEvent event, int id)
     {
+        if (debugInputEvents) {
+            debugMotionEvent(event);
+        }
+
         if (m_tabletEventSupported == null)
             m_tabletEventSupported = isTabletEventSupported();
 
@@ -861,6 +868,10 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
 
     static boolean sendMouseEvent(MotionEvent event, int id)
     {
+        if (debugInputEvents) {
+            debugMotionEvent(event);
+        }
+
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_UP:
                 mouseUp(id, event.getEventTime(), (int) event.getX(), (int) event.getY(),
@@ -927,6 +938,10 @@ class QtInputDelegate implements QtInputConnection.QtInputConnectionListener, Qt
     @SuppressWarnings("fallthrough")
     private static boolean sendTabletEvent(MotionEvent event, int id, int pointerType)
     {
+        if (debugInputEvents) {
+            debugMotionEvent(event);
+        }
+
         int action = event.getActionMasked();
         switch (action) {
             case MotionEvent.ACTION_MOVE:

@@ -17,6 +17,60 @@
 
 #include <QGuiApplication>
 #include <QtMath>
+#include <QVariantHash>
+#include <QVariantList>
+
+#define DEBUG_MOTION_EVENT_AXIS_LIST \
+    DEBUG_MOTION_EVENT_AXIS_X(BRAKE, 0x00000017) \
+    DEBUG_MOTION_EVENT_AXIS_X(DISTANCE, 0x00000018) \
+    DEBUG_MOTION_EVENT_AXIS_X(GAS, 0x00000016) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_1, 0x00000020) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_2, 0x00000021) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_3, 0x00000022) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_4, 0x00000023) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_5, 0x00000024) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_6, 0x00000025) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_7, 0x00000026) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_8, 0x00000027) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_9, 0x00000028) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_10, 0x00000029) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_11, 0x0000002a) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_12, 0x0000002b) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_13, 0x0000002c) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_14, 0x0000002d) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_15, 0x0000002e) \
+    DEBUG_MOTION_EVENT_AXIS_X(GENERIC_16, 0x0000002f) \
+    DEBUG_MOTION_EVENT_AXIS_X(GESTURE_PINCH_SCALE_FACTOR, 0x00000034) \
+    DEBUG_MOTION_EVENT_AXIS_X(GESTURE_SCROLL_X_DISTANCE, 0x00000032) \
+    DEBUG_MOTION_EVENT_AXIS_X(GESTURE_SCROLL_Y_DISTANCE, 0x00000033) \
+    DEBUG_MOTION_EVENT_AXIS_X(GESTURE_X_OFFSET, 0x00000030) \
+    DEBUG_MOTION_EVENT_AXIS_X(GESTURE_Y_OFFSET, 0x00000031) \
+    DEBUG_MOTION_EVENT_AXIS_X(HAT_X, 0x0000000f) \
+    DEBUG_MOTION_EVENT_AXIS_X(HAT_Y, 0x00000010) \
+    DEBUG_MOTION_EVENT_AXIS_X(HSCROLL, 0x0000000a) \
+    DEBUG_MOTION_EVENT_AXIS_X(LTRIGGER, 0x00000011) \
+    DEBUG_MOTION_EVENT_AXIS_X(ORIENTATION, 0x00000008) \
+    DEBUG_MOTION_EVENT_AXIS_X(PRESSURE, 0x00000002) \
+    DEBUG_MOTION_EVENT_AXIS_X(RELATIVE_X, 0x0000001b) \
+    DEBUG_MOTION_EVENT_AXIS_X(RELATIVE_Y, 0x0000001c) \
+    DEBUG_MOTION_EVENT_AXIS_X(RTRIGGER, 0x00000012) \
+    DEBUG_MOTION_EVENT_AXIS_X(RUDDER, 0x00000014) \
+    DEBUG_MOTION_EVENT_AXIS_X(RX, 0x0000000c) \
+    DEBUG_MOTION_EVENT_AXIS_X(RY, 0x0000000d) \
+    DEBUG_MOTION_EVENT_AXIS_X(RZ, 0x0000000e) \
+    DEBUG_MOTION_EVENT_AXIS_X(SCROLL, 0x0000001a) \
+    DEBUG_MOTION_EVENT_AXIS_X(SIZE, 0x00000003) \
+    DEBUG_MOTION_EVENT_AXIS_X(THROTTLE, 0x00000013) \
+    DEBUG_MOTION_EVENT_AXIS_X(TILT, 0x00000019) \
+    DEBUG_MOTION_EVENT_AXIS_X(TOOL_MAJOR, 0x00000006) \
+    DEBUG_MOTION_EVENT_AXIS_X(TOOL_MINOR, 0x00000007) \
+    DEBUG_MOTION_EVENT_AXIS_X(TOUCH_MAJOR, 0x00000004) \
+    DEBUG_MOTION_EVENT_AXIS_X(TOUCH_MINOR, 0x00000005) \
+    DEBUG_MOTION_EVENT_AXIS_X(VSCROLL, 0x00000009) \
+    DEBUG_MOTION_EVENT_AXIS_X(WHEEL, 0x00000015) \
+    DEBUG_MOTION_EVENT_AXIS_X(X, 0x00000000) \
+    DEBUG_MOTION_EVENT_AXIS_X(Y, 0x00000001) \
+    DEBUG_MOTION_EVENT_AXIS_X(Z, 0x0000000b)
 
 QT_BEGIN_NAMESPACE
 
@@ -1103,6 +1157,77 @@ namespace QtAndroidInput
 
     }
 
+    static void debugMotionEvent(JNIEnv * /*env*/, jobject /*thiz*/, jobject event)
+    {
+        QCoreApplication *app = QCoreApplication::instance();
+        if (app) {
+            QJniObject ev(event);
+
+            QVariantList pointers;
+            size_t pointerCount = ev.callMethod<int>("getPointerCount", "()I");
+            for (size_t pointerIndex = 0; pointerIndex < pointerCount; ++pointerIndex) {
+                pointers.append(QVariantHash({
+                        { QStringLiteral("pointerIndex"), qulonglong(pointerIndex) },
+                        { QStringLiteral("pointerId"),
+                          ev.callMethod<jint>("getPointerId", "(I)I", jint(pointerIndex)) },
+                        { QStringLiteral("axes"),
+                          QVariantHash({
+#define DEBUG_MOTION_EVENT_AXIS_X(AXIS, VALUE) \
+    { QStringLiteral(#AXIS),                   \
+      ev.callMethod<jfloat>("getAxisValue", "(II)F", jint(VALUE), jint(pointerIndex)) },
+                                  DEBUG_MOTION_EVENT_AXIS_LIST
+#undef DEBUG_MOTION_EVENT_AXIS_X
+                          }) },
+                }));
+            }
+
+            QVariantList history;
+            size_t historySize = ev.callMethod<jint>("getHistorySize", "()I");
+            for (size_t historicalIndex = 0; historicalIndex < historySize; ++historicalIndex) {
+                QVariantList historicalPointers;
+                for (size_t pointerIndex = 0; pointerIndex < pointerCount; ++pointerIndex) {
+                    historicalPointers.append(QVariantHash({
+                            { QStringLiteral("pointerIndex"), qulonglong(pointerIndex) },
+                            { QStringLiteral("pointerId"),
+                              ev.callMethod<jint>("getPointerId", "(I)I", jint(pointerIndex)) },
+                            { QStringLiteral("axes"),
+                              QVariantHash({
+#define DEBUG_MOTION_EVENT_AXIS_X(AXIS, VALUE)                                                   \
+    { QStringLiteral(#AXIS),                                                                     \
+      ev.callMethod<jfloat>("getHistoricalAxisValue", "(III)F", jint(VALUE), jint(pointerIndex), \
+                            jint(historicalIndex)) },
+                                      DEBUG_MOTION_EVENT_AXIS_LIST
+#undef DEBUG_MOTION_EVENT_AXIS_X
+                              }) },
+                    }));
+                }
+
+                history.append(QVariantHash({
+                        { QStringLiteral("historyIndex"), qulonglong(historicalIndex) },
+                        { QStringLiteral("eventTime"),
+                          qlonglong(ev.callMethod<jlong>("getHistoricalEventTime", "(I)J",
+                                                         jint(historicalIndex))) },
+                        { QStringLiteral("pointers"), historicalPointers },
+                }));
+            }
+
+            QVariantHash data = {
+                { QStringLiteral("deviceId"), ev.callMethod<jint>("getDeviceId", "()I") },
+                { QStringLiteral("action"), ev.callMethod<jint>("getAction", "()I") },
+                { QStringLiteral("actionMasked"), ev.callMethod<jint>("getActionMasked", "()I") },
+                { QStringLiteral("eventTime"),
+                  qlonglong(ev.callMethod<jint>("getEventTime", "()J")) },
+                { QStringLiteral("buttonState"), ev.callMethod<jint>("getButtonState", "()I") },
+                { QStringLiteral("metaState"), ev.callMethod<jint>("getMetaState", "()I") },
+                { QStringLiteral("pointerCount"), qulonglong(pointerCount) },
+                { QStringLiteral("pointers"), pointers },
+                { QStringLiteral("history"), history },
+            };
+
+            Q_EMIT app->debugAndroidInputEvent(data);
+        }
+    }
+
 
     static const JNINativeMethod methods[] = {
         {"touchBegin","(I)V",(void*)touchBegin},
@@ -1121,6 +1246,7 @@ namespace QtAndroidInput
         {"keyboardVisibilityChanged", "(Z)V", (void *)keyboardVisibilityChanged},
         {"keyboardGeometryChanged", "(IIII)V", (void *)keyboardGeometryChanged},
         {"handleLocationChanged", "(III)V", (void *)handleLocationChanged},
+        {"debugMotionEvent", "(Landroid/view/MotionEvent;)V", (void *)debugMotionEvent},
     };
 
     bool registerNatives(QJniEnvironment &env)

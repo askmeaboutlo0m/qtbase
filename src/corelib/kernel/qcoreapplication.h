@@ -22,6 +22,10 @@ typedef struct tagMSG MSG;
 #endif
 #endif
 
+#ifdef Q_OS_ANDROID
+#include <QtCore/qvariant.h>
+#endif
+
 QT_BEGIN_NAMESPACE
 
 class QAbstractEventDispatcher;
@@ -53,6 +57,10 @@ class QCoreApplicationPrivate;
 // add additional function keys.
 #ifdef Q_OS_ANDROID
 #   define KRITA_QATTRIBUTE_ANDROID_EMULATE_MOUSE_BUTTONS_FOR_HIGH_FUNCTION_KEYS 2u
+#endif
+
+#ifdef Q_OS_ANDROID
+#   define KRITA_QATTRIBUTE_ANDROID_DEBUG_INPUT_EVENTS 4u
 #endif
 
 // End of Krita attributes.
@@ -229,6 +237,10 @@ Q_SIGNALS:
     void organizationDomainChanged();
     void applicationNameChanged();
     void applicationVersionChanged();
+
+#ifdef Q_OS_ANDROID
+    void debugAndroidInputEvent(const QVariantHash &data);
+#endif
 
 protected:
     bool event(QEvent *) override;

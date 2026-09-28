@@ -98,6 +98,12 @@ void QNativeInterface::QAndroidApplication::hideSplashScreen(int duration)
     QtAndroidPrivate::activity().callMethod<void>("hideSplashScreen", duration);
 }
 
+void QNativeInterface::QAndroidApplication::setDebugInputEvents(bool debugInputEvents)
+{
+    QJniObject::callStaticMethod<void>("org/qtproject/qt/android/QtNative", "setDebugInputEvents",
+                                       "(Z)V", debugInputEvents);
+}
+
 /*!
     Posts the function \a runnable to the Android thread. The function will be
     queued and executed on the Android UI thread. If the call is made on the
