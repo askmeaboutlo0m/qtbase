@@ -2631,15 +2631,15 @@ QTabletEvent::QTabletEvent(Type type, const QPointingDevice *dev, const QPointF 
                  float tangentialPressure, qreal rotation, float z,
                  Qt::KeyboardModifiers keyState,
                  Qt::MouseButton button, Qt::MouseButtons buttons)
-    : QSinglePointEvent(type, dev, pos, pos, globalPos, button, buttons, keyState),
-      m_tangential(tangentialPressure),
-      m_xTilt(xTilt),
-      m_yTilt(yTilt),
-      m_z(z)
+    : QSinglePointEvent(type, dev, pos, pos, globalPos, button, buttons, keyState)
 {
     QEventPoint &p = point(0);
     QMutableEventPoint::setPressure(p, pressure);
     QMutableEventPoint::setRotation(p, rotation);
+    QMutableEventPoint::setTangentialPressure(p, tangentialPressure);
+    QMutableEventPoint::setXTilt(p, xTilt);
+    QMutableEventPoint::setYTilt(p, yTilt);
+    QMutableEventPoint::setZ(p, z);
 }
 
 Q_IMPL_POINTER_EVENT(QTabletEvent)
@@ -2652,8 +2652,6 @@ Q_IMPL_POINTER_EVENT(QTabletEvent)
     neutral position.  Current airbrushes can only move in the positive
     direction from the neutrual position. If the device does not support
     tangential pressure, this value is always 0.0.
-
-    \note The value is stored as a single-precision float.
 
     \sa pressure()
 */
@@ -2689,8 +2687,6 @@ Q_IMPL_POINTER_EVENT(QTabletEvent)
     \image qtabletevent-tilt.png {Illustration of a device that is tilted
            in a 3 Dimensional coordinate system}
 
-    \note The value is stored as a single-precision float.
-
     \sa yTilt()
 */
 
@@ -2701,8 +2697,6 @@ Q_IMPL_POINTER_EVENT(QTabletEvent)
     perpendicular in the direction of the y axis.
     Positive values are towards the bottom of the tablet. The angle is
     within the range -60 to +60 degrees.
-
-    \note The value is stored as a single-precision float.
 
     \sa xTilt()
 */
@@ -2746,8 +2740,6 @@ Q_IMPL_POINTER_EVENT(QTabletEvent)
     Returns the z position of the device. Typically this is represented by a
     wheel on a 4D Mouse. If the device does not support a Z-axis, this value is
     always zero. This is \b not the same as pressure.
-
-    \note The value is stored as a single-precision float.
 
     \sa pressure()
 */

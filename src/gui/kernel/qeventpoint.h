@@ -30,6 +30,10 @@ class Q_GUI_EXPORT QEventPoint
     Q_PROPERTY(qreal timeHeld READ timeHeld CONSTANT)
     Q_PROPERTY(qreal pressure READ pressure CONSTANT)
     Q_PROPERTY(qreal rotation READ rotation CONSTANT)
+    Q_PROPERTY(qreal tangentialPressure READ tangentialPressure CONSTANT)
+    Q_PROPERTY(qreal xTilt READ xTilt CONSTANT)
+    Q_PROPERTY(qreal yTilt READ yTilt CONSTANT)
+    Q_PROPERTY(qreal z READ z CONSTANT)
     Q_PROPERTY(QSizeF ellipseDiameters READ ellipseDiameters CONSTANT)
     Q_PROPERTY(QVector2D velocity READ velocity CONSTANT)
     Q_PROPERTY(QPointF position READ position CONSTANT)
@@ -119,6 +123,10 @@ public:
     qreal timeHeld() const;
     qreal pressure() const;
     qreal rotation() const;
+    qreal tangentialPressure() const;
+    qreal xTilt() const;
+    qreal yTilt() const;
+    qreal z() const;
     QSizeF ellipseDiameters() const;
 
     bool isAccepted() const;

@@ -362,16 +362,10 @@ public:
 #endif
     inline qreal pressure() const { Q_ASSERT(!points().isEmpty()); return points().first().pressure(); }
     inline qreal rotation() const { Q_ASSERT(!points().isEmpty()); return points().first().rotation(); }
-    inline qreal z() const { return m_z; }
-    inline qreal tangentialPressure() const { return m_tangential; }
-    inline qreal xTilt() const { return m_xTilt; }
-    inline qreal yTilt() const { return m_yTilt; }
-
-protected:
-    float m_tangential;
-    float m_xTilt;
-    float m_yTilt;
-    float m_z;
+    inline qreal z() const { Q_ASSERT(!points().isEmpty()); return points().first().z(); }
+    inline qreal tangentialPressure() const { Q_ASSERT(!points().isEmpty()); return points().first().tangentialPressure(); }
+    inline qreal xTilt() const { Q_ASSERT(!points().isEmpty()); return points().first().xTilt(); }
+    inline qreal yTilt() const { Q_ASSERT(!points().isEmpty()); return points().first().yTilt(); }
 };
 #endif // QT_CONFIG(tabletevent)
 

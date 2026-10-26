@@ -368,6 +368,46 @@ qreal QEventPoint::rotation() const
 { return d ? d->rotation : 0.0; }
 
 /*!
+    \property QEventPoint::tangentialPressure
+    \brief the tangential pressure for the device (e.g. air brush finger wheel.)
+
+    The return value is in the range \c -1.0 to \c 1.0, the default is zero.
+*/
+qreal QEventPoint::tangentialPressure() const
+{ return d ? d->tangentialPressure : 0.0; }
+
+/*!
+    \property QEventPoint::xTilt
+    \brief angle between the device (e.g. stylus) and the surface on the x axis.
+
+    The return value is in degrees, where zero (the default) indicates that the
+    device is perpendicular to the surface. Positive values are towards the
+    right. The angle is in the range -60 to +60 degrees.
+*/
+qreal QEventPoint::xTilt() const
+{ return d ? d->xTilt : 0.0; }
+
+/*!
+    \property QEventPoint::yTilt
+    \brief angle between the device (e.g. stylus) and the surface on the y axis.
+
+    The return value is in degrees, where zero (the default) indicates that the
+    device is perpendicular to the surface. Positive values are towards the
+    bottom. The angle is in the range -60 to +60 degrees.
+*/
+qreal QEventPoint::yTilt() const
+{ return d ? d->yTilt : 0.0; }
+
+/*!
+    \property QEventPoint::z
+    \brief z position of the device (e.g. a wheel on a 4D mouse.)
+
+    The default value is zero. This is \b not the same as pressure.
+*/
+qreal QEventPoint::z() const
+{ return d ? d->z : 0.0; }
+
+/*!
     \property QEventPoint::ellipseDiameters
     \brief the width and height of the bounding ellipse of the touch point.
 
@@ -535,6 +575,10 @@ void QMutableEventPoint::update(const QEventPoint &other, QEventPoint &target)
     setGlobalPosition(target, other.globalPosition());
     setEllipseDiameters(target, other.ellipseDiameters());
     setRotation(target, other.rotation());
+    setTangentialPressure(target, other.tangentialPressure());
+    setXTilt(target, other.xTilt());
+    setYTilt(target, other.yTilt());
+    setZ(target, other.z());
     setVelocity(target, other.velocity());
     setUniqueId(target, other.uniqueId()); // for TUIO
 }

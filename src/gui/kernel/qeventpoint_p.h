@@ -53,6 +53,10 @@ public:
             && globalLastPos == other.globalLastPos
             && pressure == other.pressure
             && rotation == other.rotation
+            && tangentialPressure == other.tangentialPressure
+            && xTilt == other.xTilt
+            && yTilt == other.yTilt
+            && z == other.z
             && ellipseDiameters == other.ellipseDiameters
             && velocity == other.velocity
             && timestamp == other.timestamp
@@ -70,6 +74,10 @@ public:
             globalPressPos, globalGrabPos, globalLastPos;
     qreal pressure = 1;
     qreal rotation = 0;
+    qreal tangentialPressure = 0;
+    qreal xTilt = 0;
+    qreal yTilt = 0;
+    qreal z = 0;
     QSizeF ellipseDiameters = QSizeF(0, 0);
     QVector2D velocity;
     ulong timestamp = 0;
@@ -123,6 +131,10 @@ public:
     TRIVIAL_SETTER(QSizeF, ellipseDiameters, EllipseDiameters)
     TRIVIAL_SETTER(qreal, pressure, Pressure)
     TRIVIAL_SETTER(qreal, rotation, Rotation)
+    TRIVIAL_SETTER(qreal, tangentialPressure, TangentialPressure)
+    TRIVIAL_SETTER(qreal, xTilt, XTilt)
+    TRIVIAL_SETTER(qreal, yTilt, YTilt)
+    TRIVIAL_SETTER(qreal, z, Z)
     TRIVIAL_SETTER(QVector2D, velocity, Velocity)
 
     static QWindow *window(const QEventPoint &p) { return p.d->window.data(); }
